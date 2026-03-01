@@ -1,0 +1,731 @@
+/* Document Uploader — Prior-themed styles */
+
+.document-uploader {
+  font-family: 'Libre Baskerville', Georgia, serif;
+}
+
+/* Start Screen */
+.document-uploader .start-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  padding: 2rem;
+}
+
+.document-uploader .start-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 3rem;
+  max-width: 480px;
+  width: 100%;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  text-align: center;
+  border: 1px solid #e5e5e0;
+}
+
+.document-uploader .app-title {
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  color: #000;
+  margin-bottom: 0.25rem;
+  font-family: 'Libre Baskerville', Georgia, serif;
+}
+
+.document-uploader .app-subtitle {
+  font-size: 1rem;
+  color: #666;
+  margin-bottom: 2rem;
+}
+
+.document-uploader .start-card form {
+  text-align: left;
+}
+
+/* Drop Zone */
+.document-uploader .drop-zone {
+  border: 2px dashed #ccc;
+  border-radius: 8px;
+  padding: 2rem 1rem;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  margin-bottom: 0.5rem;
+}
+
+.document-uploader .drop-zone:hover {
+  border-color: #000;
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.document-uploader .drop-zone-prompt {
+  color: #999;
+  font-size: 0.9375rem;
+}
+
+.document-uploader .drop-zone-filename {
+  color: #000;
+  font-weight: 500;
+  font-size: 0.9375rem;
+}
+
+/* Form Elements */
+.document-uploader label {
+  display: block;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #666;
+  margin-bottom: 0.375rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.document-uploader input[type='text'],
+.document-uploader input[type='url'],
+.document-uploader input[type='date'],
+.document-uploader textarea,
+.document-uploader select {
+  width: 100%;
+  padding: 0.625rem 0.75rem;
+  font-size: 0.9375rem;
+  border: 1px solid #d2d2d7;
+  border-radius: 8px;
+  background: #fff;
+  color: #000;
+  transition: border-color 0.15s;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.document-uploader input:focus,
+.document-uploader textarea:focus,
+.document-uploader select:focus {
+  outline: none;
+  border-color: #000;
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.08);
+}
+
+.document-uploader textarea {
+  resize: vertical;
+}
+
+/* Buttons */
+.document-uploader .btn-primary {
+  display: inline-block;
+  background: #000;
+  color: #fff;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s;
+  text-decoration: none;
+  text-align: center;
+  margin-top: 1rem;
+  width: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.document-uploader .btn-primary:hover:not(:disabled) {
+  background: #333;
+}
+
+.document-uploader .btn-primary:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.document-uploader .btn-secondary {
+  display: inline-block;
+  background: transparent;
+  color: #000;
+  border: 1px solid #000;
+  padding: 0.625rem 1.25rem;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s;
+  text-decoration: none;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.document-uploader .btn-secondary:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.document-uploader .btn-clear {
+  background: none;
+  border: none;
+  font-size: 1.25rem;
+  color: #999;
+  cursor: pointer;
+  padding: 0 0.5rem;
+  line-height: 1;
+}
+
+.document-uploader .btn-back-hub {
+  display: block;
+  margin-top: 1.25rem;
+  font-size: 0.875rem;
+  color: #666;
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+.document-uploader .btn-back-hub:hover {
+  color: #000;
+}
+
+/* Error / Warning Banners */
+.document-uploader .error-banner {
+  background: #fff2f2;
+  color: #d70015;
+  border: 1px solid #ffcccc;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  margin-top: 1rem;
+}
+
+.document-uploader .warning-banner {
+  background: #fff8e1;
+  color: #8a6d00;
+  border: 1px solid #ffe082;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  margin-top: 0.5rem;
+}
+
+/* Review Screen */
+.document-uploader .review-screen {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 0;
+}
+
+.document-uploader .review-screen h1 {
+  font-size: 1.75rem;
+  margin-bottom: 1.5rem;
+  font-family: 'Libre Baskerville', Georgia, serif;
+  color: #000;
+}
+
+.document-uploader .form-section {
+  background: #fff;
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-bottom: 1.25rem;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+  border: 1px solid #e5e5e0;
+}
+
+.document-uploader .form-section h2 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #000;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #e5e5e0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.document-uploader .form-group {
+  margin-bottom: 1rem;
+}
+
+.document-uploader .form-group:last-child {
+  margin-bottom: 0;
+}
+
+.document-uploader .form-row {
+  display: flex;
+  gap: 1rem;
+}
+
+.document-uploader .form-row .form-group {
+  flex: 1;
+}
+
+/* Author Search */
+.document-uploader .author-search {
+  position: relative;
+}
+
+.document-uploader .author-input-wrapper {
+  display: flex;
+  align-items: center;
+}
+
+.document-uploader .author-input-wrapper input {
+  flex: 1;
+}
+
+.document-uploader .author-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: #fff;
+  border: 1px solid #d2d2d7;
+  border-radius: 8px;
+  list-style: none;
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 10;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  margin-top: 0.25rem;
+}
+
+.document-uploader .author-dropdown li {
+  padding: 0.625rem 0.75rem;
+  cursor: pointer;
+  font-size: 0.9375rem;
+}
+
+.document-uploader .author-dropdown li:hover {
+  background: #f5f5f0;
+}
+
+/* Tags */
+.document-uploader .tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.375rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  border: 1px solid #d2d2d7;
+  background: #fff;
+  color: #000;
+  cursor: pointer;
+  margin: 0.25rem;
+  transition: all 0.15s;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.document-uploader .tag:hover {
+  border-color: #000;
+}
+
+.document-uploader .tag-active {
+  background: #000;
+  color: #fff;
+  border-color: #000;
+}
+
+.document-uploader .tag-active:hover {
+  background: #333;
+  color: #fff;
+}
+
+.document-uploader .tag-remove {
+  background: none;
+  border: none;
+  color: inherit;
+  font-size: 1rem;
+  cursor: pointer;
+  margin-left: 0.375rem;
+  padding: 0;
+  line-height: 1;
+  opacity: 0.8;
+}
+
+.document-uploader .tag-remove:hover {
+  opacity: 1;
+}
+
+.document-uploader .category-tags,
+.document-uploader .keyword-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+  margin-bottom: 0.5rem;
+}
+
+/* Toggles */
+.document-uploader .toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9375rem;
+  font-weight: 400;
+  color: #000;
+  cursor: pointer;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.document-uploader .toggle-label input[type='checkbox'] {
+  width: 1.125rem;
+  height: 1.125rem;
+  accent-color: #000;
+}
+
+/* Markdown Editor */
+.document-uploader .markdown-editor {
+  margin-top: 0.5rem;
+}
+
+.document-uploader .markdown-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-top: 0.5rem;
+}
+
+.document-uploader .pane-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #999;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.375rem;
+}
+
+.document-uploader .markdown-input textarea {
+  width: 100%;
+  min-height: 400px;
+  font-family: 'SF Mono', 'Fira Code', Menlo, monospace;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  padding: 0.75rem;
+  border: 1px solid #d2d2d7;
+  border-radius: 8px;
+  resize: vertical;
+}
+
+.document-uploader .markdown-preview {
+  min-height: 400px;
+}
+
+.document-uploader .preview-content {
+  padding: 0.75rem;
+  border: 1px solid #d2d2d7;
+  border-radius: 8px;
+  min-height: 400px;
+  overflow-y: auto;
+  font-size: 0.9375rem;
+  line-height: 1.7;
+  font-family: 'Libre Baskerville', Georgia, serif;
+}
+
+.document-uploader .preview-content h1,
+.document-uploader .preview-content h2,
+.document-uploader .preview-content h3 {
+  margin-top: 1.25rem;
+  margin-bottom: 0.625rem;
+}
+
+.document-uploader .preview-content h2 {
+  font-size: 1.375rem;
+}
+
+.document-uploader .preview-content h3 {
+  font-size: 1.125rem;
+}
+
+.document-uploader .preview-content p {
+  margin-bottom: 1rem;
+}
+
+.document-uploader .preview-content img {
+  max-width: 100%;
+  border-radius: 4px;
+}
+
+.document-uploader .preview-content a {
+  color: #000;
+  text-decoration: underline;
+}
+
+/* Action Bar */
+.document-uploader .action-bar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding: 1.5rem 0;
+  border-top: 1px solid #e5e5e0;
+  margin-top: 1rem;
+  position: sticky;
+  bottom: 0;
+  background: #FDFDF4;
+}
+
+.document-uploader .action-bar .btn-primary {
+  width: auto;
+  margin-top: 0;
+}
+
+/* Confirmation Screen */
+.document-uploader .confirmation-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  padding: 2rem;
+}
+
+.document-uploader .confirmation-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 3rem;
+  max-width: 480px;
+  width: 100%;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  text-align: center;
+  border: 1px solid #e5e5e0;
+}
+
+.document-uploader .success-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #4a7c59;
+  color: #fff;
+  font-size: 1.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 1.25rem;
+}
+
+.document-uploader .confirmation-card h1 {
+  font-size: 1.5rem;
+  margin-bottom: 0.5rem;
+  font-family: 'Libre Baskerville', Georgia, serif;
+}
+
+.document-uploader .confirmation-card p {
+  color: #666;
+  margin-bottom: 1.25rem;
+}
+
+.document-uploader .reminder {
+  font-size: 0.875rem;
+  color: #999;
+  font-style: italic;
+  margin-top: 1.25rem;
+}
+
+.document-uploader .confirmation-card .btn-secondary {
+  margin-top: 1rem;
+}
+
+/* Image Matcher */
+.document-uploader .image-matcher-status {
+  margin-bottom: 1rem;
+}
+
+.document-uploader .image-matcher-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+
+.document-uploader .image-matcher-column h3 {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 0.75rem;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.document-uploader .image-thumbnails {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+  gap: 0.625rem;
+}
+
+.document-uploader .image-thumb {
+  position: relative;
+  border: 2px solid #d2d2d7;
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.document-uploader .image-thumb:hover {
+  border-color: #000;
+}
+
+.document-uploader .image-thumb.selected {
+  border-color: #000;
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.12);
+}
+
+.document-uploader .image-thumb.assigned {
+  opacity: 0.55;
+}
+
+.document-uploader .image-thumb.assigned.selected {
+  opacity: 1;
+}
+
+.document-uploader .image-thumb img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  display: block;
+}
+
+.document-uploader .image-thumb-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: #000;
+  color: #fff;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.document-uploader .image-thumb-name {
+  display: block;
+  font-size: 0.6875rem;
+  color: #666;
+  padding: 0.25rem 0.375rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.document-uploader .figure-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+
+.document-uploader .figure-card {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  border: 1px solid #e5e5e0;
+  border-radius: 8px;
+  padding: 0.75rem;
+}
+
+.document-uploader .figure-card-preview {
+  width: 80px;
+  height: 80px;
+  border: 2px dashed #ccc;
+  border-radius: 6px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  overflow: hidden;
+}
+
+.document-uploader .figure-card-preview:hover {
+  border-color: #000;
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.document-uploader .figure-card-preview.has-image {
+  border-style: solid;
+  border-color: #d2d2d7;
+}
+
+.document-uploader .figure-card-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.document-uploader .figure-card-placeholder {
+  font-size: 0.6875rem;
+  color: #999;
+  text-align: center;
+  padding: 0.25rem;
+}
+
+.document-uploader .figure-card-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.document-uploader .figure-card-number {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #000;
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
+.document-uploader .figure-card-caption {
+  font-size: 0.8125rem;
+  color: #000;
+  font-weight: 500;
+  margin-bottom: 0.25rem;
+}
+
+.document-uploader .figure-card-alt {
+  font-size: 0.75rem;
+  color: #999;
+  line-height: 1.4;
+}
+
+.document-uploader .figure-card-info .btn-clear {
+  font-size: 0.75rem;
+  color: #d70015;
+  margin-top: 0.25rem;
+  padding: 0;
+}
+
+/* Image file list on start screen */
+.document-uploader .image-file-list {
+  margin-top: 0.5rem;
+}
+
+.document-uploader .image-file-list p {
+  font-size: 0.8125rem;
+  color: #000;
+  font-weight: 500;
+  margin-bottom: 0.25rem;
+}
+
+.document-uploader .image-file-names {
+  font-size: 0.75rem;
+  color: #999;
+  line-height: 1.5;
+}
+
+/* Utilities */
+.document-uploader .muted {
+  color: #999;
+  font-size: 0.875rem;
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+  .document-uploader .markdown-split {
+    grid-template-columns: 1fr;
+  }
+
+  .document-uploader .form-row {
+    flex-direction: column;
+  }
+
+  .document-uploader .review-screen {
+    padding: 0;
+  }
+
+  .document-uploader .image-matcher-layout {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,34 @@
+[
+  {
+    "id": "analytics",
+    "title": "Analytics Dashboard",
+    "description": "Cross-platform engagement metrics & insights",
+    "icon": "chart",
+    "route": "/analytics",
+    "status": "active"
+  },
+  {
+    "id": "uploader",
+    "title": "Document Uploader",
+    "description": "Upload and manage editorial documents",
+    "icon": "document",
+    "route": "/uploader",
+    "status": "active"
+  },
+  {
+    "id": "reports",
+    "title": "Report Generator",
+    "description": "One-click branded editorial PDF reports",
+    "icon": "report",
+    "route": "/reports",
+    "status": "active"
+  },
+  {
+    "id": "assistant",
+    "title": "AI Assistant",
+    "description": "Ask questions about your data",
+    "icon": "chat",
+    "route": "/assistant",
+    "status": "active"
+  }
+]

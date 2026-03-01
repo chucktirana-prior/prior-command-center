@@ -1,0 +1,12 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&display=swap');
+
+body {
+  font-family: 'Libre Baskerville', Georgia, serif;
+  background-color: #FDFDF4;
+  color: #000;
+  margin: 0;
+}
