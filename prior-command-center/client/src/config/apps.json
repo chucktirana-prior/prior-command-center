@@ -30,5 +30,13 @@
     "icon": "chat",
     "route": "/assistant",
     "status": "active"
+  },
+  {
+    "id": "locations",
+    "title": "Location Monitor",
+    "description": "Track linked businesses and flag outdated guides",
+    "icon": "location",
+    "route": "/locations",
+    "status": "active"
   }
 ]

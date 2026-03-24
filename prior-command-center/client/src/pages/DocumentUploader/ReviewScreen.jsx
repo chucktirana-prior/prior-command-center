@@ -1,9 +1,10 @@
-import { useState, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import AuthorSearch from './AuthorSearch';
 import CategoryPicker from './CategoryPicker';
 import MarkdownEditor from './MarkdownEditor';
 import ImageMatcher from './ImageMatcher';
 import { extractFigures, replaceFigureSrcs } from '../../utils/figureParser';
+import { getBodySlotKey, normalizeImages, parseBodySlotKey, suggestAssignments } from '../../utils/imageNaming';
 
 export default function ReviewScreen({ data, imageFiles, onSaved, onCancel }) {
   const [fields, setFields] = useState({
@@ -15,21 +16,78 @@ export default function ReviewScreen({ data, imageFiles, onSaved, onCancel }) {
     metaDescription: data.metaDescription || '',
     keywords: data.keywords || [],
     articleBody: data.articleBody || '',
+    heroCaption: data.heroCaption || '',
     datePublished: '',
     updatedAt: '',
     hideFromLatestArticles: false,
     isFreeContent: false,
   });
-
   const [author, setAuthor] = useState(null);
   const [categories, setCategories] = useState([]);
   const [keywordInput, setKeywordInput] = useState('');
-  const [assignments, setAssignments] = useState(new Map());
+  const [confirmedAssignments, setConfirmedAssignments] = useState({});
+  const [dismissedSuggestions, setDismissedSuggestions] = useState({});
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState('');
   const [error, setError] = useState(null);
 
   const figures = useMemo(() => extractFigures(fields.articleBody), [fields.articleBody]);
+  const images = useMemo(() => normalizeImages(imageFiles), [imageFiles]);
+
+  const rawSuggestions = useMemo(
+    () => suggestAssignments(images, figures),
+    [images, figures]
+  );
+
+  const suggestions = useMemo(() => {
+    const filtered = {};
+    for (const [slotKey, suggestion] of Object.entries(rawSuggestions)) {
+      if (confirmedAssignments[slotKey]) continue;
+      if (dismissedSuggestions[slotKey] === suggestion.imageId) continue;
+      filtered[slotKey] = suggestion;
+    }
+    return filtered;
+  }, [confirmedAssignments, dismissedSuggestions, rawSuggestions]);
+
+  useEffect(() => {
+    const validSlotKeys = new Set(['hero', 'index', ...figures.map((figure) => getBodySlotKey(figure.index))]);
+    const validImageIds = new Set(images.map((image) => image.id));
+
+    setConfirmedAssignments((prev) => {
+      const next = {};
+      let changed = false;
+
+      for (const [slotKey, imageId] of Object.entries(prev)) {
+        if (validSlotKeys.has(slotKey) && validImageIds.has(imageId)) {
+          next[slotKey] = imageId;
+        } else {
+          changed = true;
+        }
+      }
+
+      return changed ? next : prev;
+    });
+
+    setDismissedSuggestions((prev) => {
+      const next = {};
+      let changed = false;
+
+      for (const [slotKey, imageId] of Object.entries(prev)) {
+        if (validSlotKeys.has(slotKey) && validImageIds.has(imageId)) {
+          next[slotKey] = imageId;
+        } else {
+          changed = true;
+        }
+      }
+
+      return changed ? next : prev;
+    });
+  }, [figures, images]);
+
+  const imageMap = useMemo(
+    () => new Map(images.map((image) => [image.id, image])),
+    [images]
+  );
 
   function updateField(name, value) {
     setFields((prev) => ({ ...prev, [name]: value }));
@@ -57,32 +115,157 @@ export default function ReviewScreen({ data, imageFiles, onSaved, onCancel }) {
     }
   }
 
+  function assignImageToSlot(slotKey, imageId) {
+    setConfirmedAssignments((prev) => {
+      const next = { ...prev };
+      for (const [existingSlotKey, existingImageId] of Object.entries(next)) {
+        if (existingImageId === imageId) {
+          delete next[existingSlotKey];
+        }
+      }
+      next[slotKey] = imageId;
+      return next;
+    });
+    setDismissedSuggestions((prev) => {
+      const next = { ...prev };
+      delete next[slotKey];
+      return next;
+    });
+  }
+
+  function acceptSuggestion(slotKey) {
+    const suggestion = suggestions[slotKey];
+    if (!suggestion) return;
+    assignImageToSlot(slotKey, suggestion.imageId);
+  }
+
+  function acceptAllSuggestions() {
+    for (const slotKey of Object.keys(suggestions)) {
+      acceptSuggestion(slotKey);
+    }
+  }
+
+  function clearSlot(slotKey) {
+    setConfirmedAssignments((prev) => {
+      if (!prev[slotKey]) return prev;
+      const next = { ...prev };
+      delete next[slotKey];
+      return next;
+    });
+    setDismissedSuggestions((prev) => {
+      const suggestion = rawSuggestions[slotKey];
+      if (!suggestion) return prev;
+      return { ...prev, [slotKey]: suggestion.imageId };
+    });
+  }
+
+  function removeAssignment(slotKey) {
+    setConfirmedAssignments((prev) => {
+      if (!prev[slotKey]) return prev;
+      const next = { ...prev };
+      delete next[slotKey];
+      return next;
+    });
+  }
+
+  function buildPreSaveWarnings() {
+    const warnings = [];
+    const confirmedImageIds = new Set(Object.values(confirmedAssignments));
+    const unassignedImages = images.filter((image) => !confirmedImageIds.has(image.id));
+
+    if (!confirmedAssignments.hero) {
+      warnings.push('Hero image is not assigned.');
+    }
+
+    if (!confirmedAssignments.index) {
+      warnings.push('Index image is not assigned.');
+    }
+
+    const missingFigures = figures
+      .filter((figure) => !confirmedAssignments[getBodySlotKey(figure.index)])
+      .map((figure) => figure.index + 1);
+
+    if (missingFigures.length > 0) {
+      warnings.push(`Unassigned figure slots: ${missingFigures.join(', ')}.`);
+    }
+
+    if (unassignedImages.length > 0) {
+      warnings.push(`${unassignedImages.length} uploaded image${unassignedImages.length !== 1 ? 's are' : ' is'} still unused.`);
+    }
+
+    return warnings;
+  }
+
   async function handleSave() {
     setSaving(true);
     setError(null);
     setSaveStatus('');
 
     try {
-      let finalArticleBody = fields.articleBody;
+      const warnings = buildPreSaveWarnings();
+      if (warnings.length > 0) {
+        const shouldContinue = window.confirm(
+          `Some images are still unmatched:\n\n- ${warnings.join('\n- ')}\n\nSave anyway?`
+        );
+        if (!shouldContinue) {
+          setSaving(false);
+          return;
+        }
+      }
 
-      if (assignments.size > 0) {
-        setSaveStatus(`Uploading ${assignments.size} image${assignments.size !== 1 ? 's' : ''}...`);
+      let finalArticleBody = fields.articleBody;
+      let heroImageAssetId = null;
+      let indexImageAssetId = null;
+      const allFiles = [];
+      const allMeta = [];
+
+      const confirmedHero = confirmedAssignments.hero ? imageMap.get(confirmedAssignments.hero) : null;
+      const confirmedIndex = confirmedAssignments.index ? imageMap.get(confirmedAssignments.index) : null;
+
+      if (confirmedHero) {
+        allFiles.push(confirmedHero.file);
+        allMeta.push({
+          figureIndex: -1,
+          fileName: confirmedHero.name,
+          title: fields.title ? `${fields.title} - Hero` : confirmedHero.name,
+        });
+      }
+
+      if (confirmedIndex) {
+        allFiles.push(confirmedIndex.file);
+        allMeta.push({
+          figureIndex: -2,
+          fileName: confirmedIndex.name,
+          title: fields.title ? `${fields.title} - Index` : confirmedIndex.name,
+        });
+      }
+
+      for (const [slotKey, imageId] of Object.entries(confirmedAssignments)) {
+        const figureIndex = parseBodySlotKey(slotKey);
+        if (figureIndex === null) continue;
+
+        const image = imageMap.get(imageId);
+        const figure = figures.find((entry) => entry.index === figureIndex);
+        if (!image || !figure) continue;
+
+        allFiles.push(image.file);
+        allMeta.push({
+          figureIndex,
+          fileName: image.name,
+          title: figure.caption || figure.alt || image.name,
+        });
+      }
+
+      if (allFiles.length > 0) {
+        setSaveStatus(`Uploading ${allFiles.length} image${allFiles.length !== 1 ? 's' : ''}...`);
 
         const formData = new FormData();
-        const assignmentMeta = [];
-
-        for (const [figureIndex, file] of assignments) {
-          const figure = figures.find((f) => f.index === figureIndex);
+        for (const file of allFiles) {
           formData.append('images', file);
-          assignmentMeta.push({
-            figureIndex,
-            fileName: file.name,
-            title: figure?.caption || figure?.alt || file.name,
-          });
         }
-        formData.append('meta', JSON.stringify(assignmentMeta));
+        formData.append('meta', JSON.stringify(allMeta));
 
-        const uploadRes = await fetch('/api/upload-images', {
+        const uploadRes = await fetch('/api/contentful/upload-images', {
           method: 'POST',
           body: formData,
         });
@@ -94,11 +277,20 @@ export default function ReviewScreen({ data, imageFiles, onSaved, onCancel }) {
 
         const uploadResult = await uploadRes.json();
         const figureUrlMap = new Map();
+
         for (const asset of uploadResult.assets) {
-          figureUrlMap.set(asset.figureIndex, asset.url);
+          if (asset.figureIndex === -1) {
+            heroImageAssetId = asset.assetId;
+          } else if (asset.figureIndex === -2) {
+            indexImageAssetId = asset.assetId;
+          } else {
+            figureUrlMap.set(asset.figureIndex, asset.url);
+          }
         }
 
-        finalArticleBody = replaceFigureSrcs(finalArticleBody, figureUrlMap);
+        if (figureUrlMap.size > 0) {
+          finalArticleBody = replaceFigureSrcs(finalArticleBody, figureUrlMap);
+        }
       }
 
       setSaveStatus('Creating draft...');
@@ -107,6 +299,8 @@ export default function ReviewScreen({ data, imageFiles, onSaved, onCancel }) {
         articleBody: finalArticleBody,
         authorId: author?.id || null,
         categoryIds: categories.map((c) => c.id),
+        heroImageAssetId,
+        indexImageAssetId,
       };
 
       const res = await fetch('/api/contentful/draft', {
@@ -129,6 +323,8 @@ export default function ReviewScreen({ data, imageFiles, onSaved, onCancel }) {
       setSaveStatus('');
     }
   }
+
+  const liveWarnings = buildPreSaveWarnings();
 
   return (
     <div className="review-screen">
@@ -161,6 +357,15 @@ export default function ReviewScreen({ data, imageFiles, onSaved, onCancel }) {
             rows={3}
             value={fields.homepageExcerpt}
             onChange={(e) => updateField('homepageExcerpt', e.target.value)}
+          />
+        </div>
+
+        <div className="form-group">
+          <label htmlFor="heroCaption">Hero Caption</label>
+          <input
+            id="heroCaption"
+            value={fields.heroCaption}
+            onChange={(e) => updateField('heroCaption', e.target.value)}
           />
         </div>
       </section>
@@ -238,24 +443,39 @@ export default function ReviewScreen({ data, imageFiles, onSaved, onCancel }) {
         </div>
       </section>
 
-      {figures.length > 0 && imageFiles.length > 0 && (
+      {imageFiles.length > 0 && (
         <section className="form-section">
-          <h2>Image Matching</h2>
+          <h2>Images</h2>
           <ImageMatcher
+            images={images}
             figures={figures}
-            imageFiles={imageFiles}
-            assignments={assignments}
-            onAssignmentsChange={setAssignments}
+            suggestions={suggestions}
+            confirmedAssignments={confirmedAssignments}
+            onAcceptSuggestion={acceptSuggestion}
+            onAcceptAllSuggestions={acceptAllSuggestions}
+            onClearSlot={clearSlot}
+            onAssignSelectedImage={assignImageToSlot}
+            onRemoveAssignment={removeAssignment}
           />
+          {liveWarnings.length > 0 && (
+            <div className="warning-banner image-warning-summary">
+              Save will still work, but these items are currently incomplete:
+              <ul>
+                {liveWarnings.map((warning) => (
+                  <li key={warning}>{warning}</li>
+                ))}
+              </ul>
+            </div>
+          )}
         </section>
       )}
 
       {figures.length > 0 && imageFiles.length === 0 && (
         <section className="form-section">
-          <h2>Image Matching</h2>
+          <h2>Images</h2>
           <div className="warning-banner">
             This article has {figures.length} figure block{figures.length !== 1 ? 's' : ''} but no images were uploaded.
-            Image placeholders will remain as "XXXX" in the article body.
+            Image placeholders will remain as &ldquo;XXXX&rdquo; in the article body.
           </div>
         </section>
       )}

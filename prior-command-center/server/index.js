@@ -4,9 +4,9 @@ import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import cron from 'node-cron';
-import config from './config.js';
+import config, { hasContentfulConfig, getContentfulTokenRotationStatus } from './config.js';
 import { initDb, getAllLastSyncs } from './db/index.js';
-import { syncAll } from './services/sync.js';
+import { resumeBackgroundJobs, syncAll } from './services/sync.js';
 import { generateWeeklyDigest, detectAndAnalyzeAnomalies } from './services/intelligence/index.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -18,6 +18,7 @@ app.use(express.json({ limit: '5mb' }));
 
 // --- Initialize Database ---
 initDb();
+resumeBackgroundJobs();
 
 // --- API Routes ---
 
@@ -27,6 +28,7 @@ import contentfulRoutes from './routes/uploader/contentful.js';
 import uploadImagesRoutes from './routes/uploader/uploadImages.js';
 
 app.use('/api/parse', parseRoutes);
+app.use('/api/contentful/upload-images', uploadImagesRoutes);
 app.use('/api/contentful', contentfulRoutes);
 app.use('/api/upload-images', uploadImagesRoutes);
 
@@ -42,12 +44,16 @@ import reportRoutes from './routes/reports.js';
 
 // AI Assistant routes (Phase 5)
 import assistantRoutes from './routes/assistant.js';
+import locationMonitorRoutes from './routes/locationMonitor.js';
+import klaviyoImportRoutes from './routes/klaviyoImport.js';
 
 app.use('/api/sync', syncRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/insights', insightsRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/assistant', assistantRoutes);
+app.use('/api/location-monitor', locationMonitorRoutes);
+app.use('/api/klaviyo-import', klaviyoImportRoutes);
 
 // Health check with DB and sync status
 app.get('/api/health', (req, res) => {
@@ -61,6 +67,10 @@ app.get('/api/health', (req, res) => {
       status: 'ok',
       timestamp: new Date().toISOString(),
       database: 'connected',
+      contentful: {
+        configured: hasContentfulConfig(),
+        tokenRotation: getContentfulTokenRotationStatus(),
+      },
       last_syncs: syncStatus,
     });
   } catch (err) {
@@ -69,6 +79,10 @@ app.get('/api/health', (req, res) => {
       timestamp: new Date().toISOString(),
       database: 'error',
       db_error: err.message,
+      contentful: {
+        configured: hasContentfulConfig(),
+        tokenRotation: getContentfulTokenRotationStatus(),
+      },
     });
   }
 });
@@ -115,10 +129,13 @@ console.log('Weekly digest scheduled: Mondays at 7:00 AM');
 // --- Startup Checks ---
 function checkEnvKeys() {
   const checks = [
+    { name: 'Contentful (Uploader)', configured: hasContentfulConfig() },
     { name: 'Klaviyo', configured: !!config.klaviyo.apiKey },
     { name: 'Google Analytics', configured: !!(config.googleAnalytics.propertyId && config.googleAnalytics.clientId && config.googleAnalytics.clientSecret && config.googleAnalytics.refreshToken) },
     { name: 'Instagram', configured: !!(config.instagram.accessToken && config.instagram.businessAccountId) },
+    { name: 'Meta App Credentials (optional token refresh)', configured: !!(config.instagram.appId && config.instagram.appSecret) },
     { name: 'Anthropic (Intelligence)', configured: !!config.anthropic.apiKey },
+    { name: 'Google Maps (Location Monitor)', configured: !!config.googleMaps.apiKey },
   ];
   for (const check of checks) {
     if (check.configured) {

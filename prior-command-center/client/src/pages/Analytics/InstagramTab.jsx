@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { LineChart, Line, BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import KpiCard from './components/KpiCard';
 import ChartWrapper from './components/ChartWrapper';
+import DataFreshnessBanner from './components/DataFreshnessBanner';
 
 const TOOLTIP_STYLE = {
   backgroundColor: '#fff',
@@ -36,7 +37,7 @@ const TYPE_BADGE_COLORS = {
   image: 'bg-prior-border/50 text-prior-body',
 };
 
-export default function InstagramTab({ dateRange }) {
+export default function InstagramTab({ dateRange, syncStatus }) {
   const [igData, setIgData] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -69,6 +70,7 @@ export default function InstagramTab({ dateRange }) {
   }
 
   const { posts, profile } = igData;
+  const totalRecords = posts.length + profile.length;
 
   // KPIs
   const totalReach = posts.reduce((s, p) => s + (p.reach || 0), 0);
@@ -116,6 +118,8 @@ export default function InstagramTab({ dateRange }) {
 
   return (
     <div className="space-y-6">
+      <DataFreshnessBanner source="Instagram" status={syncStatus} dataCount={totalRecords} />
+
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard label="Total Reach" value={fmt(totalReach)} subtitle={`${posts.length} posts`} />

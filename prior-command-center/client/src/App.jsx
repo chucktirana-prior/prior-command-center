@@ -6,6 +6,7 @@ import DocumentUploader from './pages/DocumentUploader';
 import Analytics from './pages/Analytics';
 import ReportGenerator from './pages/ReportGenerator';
 import Assistant from './pages/Assistant';
+import LocationMonitor from './pages/LocationMonitor';
 import apps from './config/apps.json';
 
 const PAGE_MAP = {
@@ -13,6 +14,7 @@ const PAGE_MAP = {
   analytics: Analytics,
   reports: ReportGenerator,
   assistant: Assistant,
+  locations: LocationMonitor,
 };
 
 export default function App() {

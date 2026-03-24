@@ -1,4 +1,12 @@
+import path from 'path';
+import { createRequire } from 'module';
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
+
+const require = createRequire(import.meta.url);
+const standardFontDataUrl = `${path.join(
+  path.dirname(require.resolve('pdfjs-dist/package.json')),
+  'standard_fonts'
+)}/`;
 
 const KNOWN_LABELS = [
   'hed',
@@ -18,9 +26,29 @@ const KNOWN_LABELS = [
   'keep reading',
 ];
 
+function isKnownLabel(label) {
+  if (KNOWN_LABELS.includes(label)) return true;
+  if (/^caption\s+\d+$/.test(label)) return true;
+  return false;
+}
+
+const MULTI_LINE_LABELS = [
+  'dek', 'bio', 'keywords', 'meta description', 'social',
+  'keep reading', 'hero caption', 'email sl', 'email pt',
+];
+
+function isMultiLineLabel(label) {
+  if (MULTI_LINE_LABELS.includes(label)) return true;
+  if (/^caption\s+\d+$/.test(label)) return true;
+  return false;
+}
+
 async function extractTextAndLinks(pdfBuffer) {
   const uint8 = new Uint8Array(pdfBuffer);
-  const doc = await getDocument({ data: uint8 }).promise;
+  const doc = await getDocument({
+    data: uint8,
+    standardFontDataUrl,
+  }).promise;
 
   const allItems = [];
   const allLinks = [];
@@ -174,7 +202,6 @@ function assignLinks(items, links) {
 
       const [lx1, ly1, lx2, ly2] = link.rect;
       const tolerance = 1;
-
       const itemEnd = item.x + (item.width || 0);
       const linkWidth = lx2 - lx1;
       const overlapStart = Math.max(item.x, lx1);
@@ -239,8 +266,8 @@ function getBodyFontSize(items) {
 function getLabelFontSize(lines) {
   for (const line of lines) {
     const plainText = line.runs.map((r) => r.str || '').join('').trim();
-    const labelMatch = plainText.match(/^([A-Za-z\s]+?):\s*/);
-    if (labelMatch && KNOWN_LABELS.includes(labelMatch[1].trim().toLowerCase())) {
+    const labelMatch = plainText.match(/^([A-Za-z0-9\s]+?):\s*/);
+    if (labelMatch && isKnownLabel(labelMatch[1].trim().toLowerCase())) {
       for (const run of line.runs) {
         if (run.str && run.str.trim() && run.fontSize) return run.fontSize;
       }
@@ -259,12 +286,18 @@ function parseLabeledFields(lines) {
   for (let i = 0; i < lines.length; i++) {
     const plainText = lines[i].runs.map((r) => r.str || '').join('').trim();
 
-    if (!plainText) continue;
+    if (!plainText) {
+      if (lastLabel) {
+        bodyStartIndex = i + 1;
+        break;
+      }
+      continue;
+    }
 
-    const labelMatch = plainText.match(/^([A-Za-z\s]+?):\s*(.*)$/s);
+    const labelMatch = plainText.match(/^([A-Za-z0-9\s]+?):\s*(.*)$/s);
     if (labelMatch) {
       const label = labelMatch[1].trim().toLowerCase();
-      if (KNOWN_LABELS.includes(label)) {
+      if (isKnownLabel(label)) {
         labeledFields[label] = labelMatch[2].trim();
         lastLabel = label;
         continuationCount = 0;
@@ -294,25 +327,48 @@ function parseLabeledFields(lines) {
         break;
       }
 
-      const looksLikeLabel = /^[A-Za-z\s]+?:\s*/.test(plainText);
+      const looksLikeLabel = /^[A-Za-z0-9\s]+?:\s*/.test(plainText);
       if (looksLikeLabel && labelFontSize && Math.abs(avgFontSize - labelFontSize) < 0.5) {
         bodyStartIndex = i + 1;
         continue;
       }
 
-      const MULTI_LINE_LABELS = ['dek', 'bio', 'keywords', 'meta description', 'social', 'keep reading'];
-      if (!MULTI_LINE_LABELS.includes(lastLabel)) {
+      if (!isMultiLineLabel(lastLabel)) {
+        const hasMoreLabels = lines.slice(i + 1, Math.min(i + 8, lines.length)).some((futureLine) => {
+          const futureText = futureLine.runs.map((r) => r.str || '').join('').trim();
+          const futureMatch = futureText.match(/^([A-Za-z0-9\s]+?):\s*/);
+          return futureMatch && isKnownLabel(futureMatch[1].trim().toLowerCase());
+        });
+
+        if (hasMoreLabels) {
+          labeledFields[lastLabel] = `${labeledFields[lastLabel]} ${plainText}`.trim();
+          bodyStartIndex = i + 1;
+          continue;
+        }
+
         bodyStartIndex = i;
         break;
       }
 
       continuationCount++;
-      if (continuationCount > 3) {
+      if (continuationCount > 10) {
+        const hasMoreLabels = lines.slice(i + 1, Math.min(i + 8, lines.length)).some((futureLine) => {
+          const futureText = futureLine.runs.map((r) => r.str || '').join('').trim();
+          const futureMatch = futureText.match(/^([A-Za-z0-9\s]+?):\s*/);
+          return futureMatch && isKnownLabel(futureMatch[1].trim().toLowerCase());
+        });
+
+        if (hasMoreLabels) {
+          labeledFields[lastLabel] = `${labeledFields[lastLabel]} ${plainText}`.trim();
+          bodyStartIndex = i + 1;
+          continue;
+        }
+
         bodyStartIndex = i;
         break;
       }
 
-      labeledFields[lastLabel] = (labeledFields[lastLabel] + ' ' + plainText).trim();
+      labeledFields[lastLabel] = `${labeledFields[lastLabel]} ${plainText}`.trim();
       bodyStartIndex = i + 1;
     }
   }
@@ -338,16 +394,34 @@ export async function parseFromPdf(pdfBuffer) {
     page: line.page,
   }));
 
+  const captions = [];
+  for (const [key, value] of Object.entries(labeledFields)) {
+    const captionMatch = key.match(/^caption\s+(\d+)$/);
+    if (captionMatch) {
+      captions.push({ number: parseInt(captionMatch[1], 10), text: value });
+    }
+  }
+  captions.sort((a, b) => a.number - b.number);
+
   return {
-    title: labeledFields['hed'] || '',
-    subtitle: labeledFields['dek'] || '',
-    slug: (labeledFields['slug'] || '').replace(/^\//, ''),
-    authorName: labeledFields['by'] || '',
+    title: labeledFields.hed || '',
+    subtitle: labeledFields.dek || '',
+    slug: (labeledFields.slug || '').replace(/^\//, ''),
+    authorName: labeledFields.by || '',
     metaTitle: labeledFields['meta title'] || '',
     metaDescription: labeledFields['meta description'] || '',
-    keywords: labeledFields['keywords']
-      ? labeledFields['keywords'].split(',').map((k) => k.trim()).filter(Boolean)
+    keywords: labeledFields.keywords
+      ? labeledFields.keywords.split(',').map((k) => k.trim()).filter(Boolean)
       : [],
+    bio: labeledFields.bio || '',
+    social: labeledFields.social || '',
+    category: labeledFields.category || '',
+    location: labeledFields.location || '',
+    heroCaption: labeledFields['hero caption'] || '',
+    keepReading: labeledFields['keep reading'] || '',
+    emailSl: labeledFields['email sl'] || '',
+    emailPt: labeledFields['email pt'] || '',
+    captions,
     bodyLines,
     bodyFontSize,
   };

@@ -6,6 +6,7 @@ export default function AuthorSearch({ initialName, onSelect }) {
   const [selected, setSelected] = useState(null);
   const [showDropdown, setShowDropdown] = useState(false);
   const [noMatch, setNoMatch] = useState(false);
+  const [error, setError] = useState('');
   const debounceRef = useRef(null);
 
   useEffect(() => {
@@ -20,12 +21,19 @@ export default function AuthorSearch({ initialName, onSelect }) {
       try {
         const res = await fetch(`/api/contentful/authors?q=${encodeURIComponent(query)}`);
         const data = await res.json();
-        setResults(data);
+        if (!res.ok) {
+          throw new Error(data.error || 'Failed to load authors');
+        }
+        const authorResults = Array.isArray(data) ? data : [];
+        setResults(authorResults);
         setShowDropdown(true);
-        setNoMatch(data.length === 0);
+        setNoMatch(authorResults.length === 0);
+        setError('');
       } catch {
         setResults([]);
         setShowDropdown(false);
+        setNoMatch(false);
+        setError('Author lookup unavailable');
       }
     }, 300);
 
@@ -37,6 +45,7 @@ export default function AuthorSearch({ initialName, onSelect }) {
     setQuery(author.name);
     setShowDropdown(false);
     setNoMatch(false);
+    setError('');
     onSelect(author);
   }
 
@@ -44,6 +53,7 @@ export default function AuthorSearch({ initialName, onSelect }) {
     setSelected(null);
     setQuery('');
     setNoMatch(false);
+    setError('');
     onSelect(null);
   }
 
@@ -81,6 +91,12 @@ export default function AuthorSearch({ initialName, onSelect }) {
       {noMatch && !selected && query.trim() && (
         <div className="warning-banner">
           Author not found in Contentful — you'll need to create them manually.
+        </div>
+      )}
+
+      {error && !selected && (
+        <div className="warning-banner">
+          {error}
         </div>
       )}
     </div>

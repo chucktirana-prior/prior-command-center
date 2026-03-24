@@ -33,6 +33,7 @@ router.post('/generate', (req, res) => {
     });
 
     doc.pipe(res);
+    doc.end();
   } catch (err) {
     console.error('Report generation error:', err);
     res.status(500).json({ ok: false, error: err.message });

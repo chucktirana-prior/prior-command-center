@@ -20,7 +20,7 @@ export default function ConfirmationScreen({ result, onReset }) {
         </a>
 
         <p className="reminder">
-          Don't forget to add the hero image and publish when ready.
+          Review images and publish when ready.
         </p>
 
         <button type="button" className="btn-secondary" onClick={onReset}>

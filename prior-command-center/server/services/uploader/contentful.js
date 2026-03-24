@@ -1,9 +1,17 @@
 import contentful from 'contentful-management';
-import config from '../../config.js';
+import config, { getMissingContentfulConfig } from '../../config.js';
 
 let clientInstance = null;
 
+function ensureContentfulConfig() {
+  const missing = getMissingContentfulConfig();
+  if (missing.length > 0) {
+    throw new Error(`Contentful is not configured. Missing: ${missing.join(', ')}`);
+  }
+}
+
 function getClient() {
+  ensureContentfulConfig();
   if (!clientInstance) {
     clientInstance = contentful.createClient({
       accessToken: config.contentful.cmaToken,
@@ -83,6 +91,26 @@ export async function createDraftArticle(fields) {
     };
   }
 
+  if (fields.heroImageAssetId) {
+    cfFields.heroImage = {
+      'en-US': {
+        sys: { type: 'Link', linkType: 'Asset', id: fields.heroImageAssetId },
+      },
+    };
+  }
+
+  if (fields.heroCaption) {
+    cfFields.heroCaption = { 'en-US': fields.heroCaption };
+  }
+
+  if (fields.indexImageAssetId) {
+    cfFields.indexImage = {
+      'en-US': {
+        sys: { type: 'Link', linkType: 'Asset', id: fields.indexImageAssetId },
+      },
+    };
+  }
+
   const entry = await env.createEntry(config.contentful.articleTypeId, {
     fields: cfFields,
   });
@@ -94,62 +122,78 @@ export async function createDraftArticle(fields) {
   };
 }
 
-export async function uploadImageAssets(files, meta) {
-  const env = await getEnvironment();
-  const results = [];
+async function uploadSingleAsset(env, file, fileMeta, label) {
+  const title = fileMeta.title || file.originalname;
+  const figureIndex = fileMeta.figureIndex;
 
-  for (let i = 0; i < files.length; i++) {
-    const file = files[i];
-    const fileMeta = meta[i] || {};
-    const title = fileMeta.title || file.originalname;
-    const figureIndex = fileMeta.figureIndex;
+  const upload = await env.createUpload({ file: file.buffer });
 
-    const upload = await env.createUpload({ file: file.buffer });
-
-    const asset = await env.createAsset({
-      fields: {
-        title: { 'en-US': title },
-        file: {
-          'en-US': {
-            contentType: file.mimetype,
-            fileName: file.originalname,
-            uploadFrom: {
-              sys: {
-                type: 'Link',
-                linkType: 'Upload',
-                id: upload.sys.id,
-              },
+  const asset = await env.createAsset({
+    fields: {
+      title: { 'en-US': title },
+      file: {
+        'en-US': {
+          contentType: file.mimetype,
+          fileName: file.originalname,
+          uploadFrom: {
+            sys: {
+              type: 'Link',
+              linkType: 'Upload',
+              id: upload.sys.id,
             },
           },
         },
       },
-    });
+    },
+  });
 
-    await asset.processForLocale('en-US');
+  await asset.processForLocale('en-US');
 
-    let readyAsset;
-    for (let attempt = 0; attempt < 30; attempt++) {
-      readyAsset = await env.getAsset(asset.sys.id);
-      const fileInfo = readyAsset.fields.file?.['en-US'];
-      if (fileInfo && fileInfo.url) break;
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-    }
+  let readyAsset;
+  for (let attempt = 0; attempt < 30; attempt++) {
+    readyAsset = await env.getAsset(asset.sys.id);
+    const fileInfo = readyAsset.fields.file?.['en-US'];
+    if (fileInfo && fileInfo.url) break;
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
 
-    if (!readyAsset?.fields?.file?.['en-US']?.url) {
-      throw new Error(`Asset processing timed out for ${file.originalname}`);
-    }
+  if (!readyAsset?.fields?.file?.['en-US']?.url) {
+    throw new Error(`Asset processing timed out for ${file.originalname}`);
+  }
 
-    await readyAsset.publish();
+  await readyAsset.publish();
 
-    const url = 'https:' + readyAsset.fields.file['en-US'].url;
+  const url = 'https:' + readyAsset.fields.file['en-US'].url;
+  console.log(`Uploaded asset ${label}: ${file.originalname} -> ${url}`);
 
-    results.push({
-      figureIndex,
-      url,
-      assetId: readyAsset.sys.id,
-    });
+  return {
+    figureIndex,
+    url,
+    assetId: readyAsset.sys.id,
+  };
+}
 
-    console.log(`Uploaded asset ${i + 1}/${files.length}: ${file.originalname} → ${url}`);
+export async function uploadImageAssets(files, meta) {
+  const env = await getEnvironment();
+  const results = [];
+  const concurrency = 3;
+
+  console.log(`Uploading ${files.length} image(s) to Contentful (concurrency: ${concurrency})...`);
+
+  for (let start = 0; start < files.length; start += concurrency) {
+    const batch = files.slice(start, start + concurrency);
+    const batchMeta = meta.slice(start, start + concurrency);
+
+    const batchResults = await Promise.all(
+      batch.map((file, offset) => uploadSingleAsset(
+        env,
+        file,
+        batchMeta[offset] || {},
+        `${start + offset + 1}/${files.length}`
+      ))
+    );
+
+    results.push(...batchResults);
   }
 
   return results;

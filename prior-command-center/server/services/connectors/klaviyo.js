@@ -1,8 +1,10 @@
 import config from '../../config.js';
-import { upsertKlaviyoCampaign } from '../../db/index.js';
+import { getKlaviyoCampaignById, upsertKlaviyoCampaign } from '../../db/index.js';
 
 const BASE_URL = 'https://a.klaviyo.com/api';
 const REVISION = '2024-10-15';
+const REQUEST_TIMEOUT_MS = 15000;
+const DEFAULT_RECENT_DAYS = 30;
 
 function headers() {
   return {
@@ -13,8 +15,22 @@ function headers() {
   };
 }
 
+async function fetchWithTimeout(url, options = {}) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  try {
+    return await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 async function klaviyoFetch(url) {
-  const res = await fetch(url, { headers: headers() });
+  const res = await fetchWithTimeout(url, { headers: headers() });
 
   // Handle rate limiting
   if (res.status === 429) {
@@ -32,96 +48,137 @@ async function klaviyoFetch(url) {
   return res.json();
 }
 
-async function fetchCampaigns() {
+function getCampaignTimestamp(attributes = {}) {
+  return attributes.send_time || attributes.scheduled_at || attributes.updated_at || attributes.created_at || null;
+}
+
+function isOnOrAfterCutoff(timestamp, cutoffIso) {
+  if (!timestamp || !cutoffIso) {
+    return false;
+  }
+
+  return new Date(timestamp).getTime() >= new Date(cutoffIso).getTime();
+}
+
+function getRecentCutoffIso(daysBack) {
+  const cutoff = new Date();
+  cutoff.setUTCDate(cutoff.getUTCDate() - daysBack);
+  return cutoff.toISOString();
+}
+
+async function fetchCampaigns({ fullSync = false, daysBack = DEFAULT_RECENT_DAYS } = {}) {
   const campaigns = [];
-  let url = `${BASE_URL}/campaigns?filter=equals(messages.channel,"email")&sort=-send_time&page[size]=50`;
+  let url = `${BASE_URL}/campaigns?filter=equals(messages.channel,"email")&sort=-scheduled_at`;
+  const recentCutoffIso = fullSync ? null : getRecentCutoffIso(daysBack);
+  let reachedOlderCampaigns = false;
 
   while (url) {
     const data = await klaviyoFetch(url);
     if (data.data) {
-      campaigns.push(...data.data);
+      for (const campaign of data.data) {
+        const timestamp = getCampaignTimestamp(campaign.attributes);
+        if (!recentCutoffIso || isOnOrAfterCutoff(timestamp, recentCutoffIso)) {
+          campaigns.push(campaign);
+          continue;
+        }
+
+        reachedOlderCampaigns = true;
+      }
     }
-    url = data.links?.next || null;
+    url = reachedOlderCampaigns ? null : (data.links?.next || null);
   }
 
   return campaigns;
 }
 
-async function fetchCampaignMetrics(campaignId) {
-  try {
-    const url = `${BASE_URL}/campaign-values-reports`;
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: headers(),
-      body: JSON.stringify({
-        data: {
-          type: 'campaign-values-report',
-          attributes: {
-            statistics: [
-              'open_rate', 'click_rate', 'bounce_rate',
-              'revenue_per_recipient', 'unique_recipients'
-            ],
-            timeframe: { key: 'last_365_days' },
-            filter: `equals(campaign_id,"${campaignId}")`,
-          },
-        },
-      }),
-    });
-
-    if (res.status === 429) {
-      const retryAfter = parseInt(res.headers.get('Retry-After') || '5', 10);
-      await new Promise(r => setTimeout(r, retryAfter * 1000));
-      return fetchCampaignMetrics(campaignId);
-    }
-
-    if (!res.ok) return null;
-
-    const data = await res.json();
-    const results = data.data?.attributes?.results?.[0];
-    if (!results) return null;
-
-    return {
-      open_rate: results.statistics?.open_rate ?? null,
-      click_rate: results.statistics?.click_rate ?? null,
-      bounce_rate: results.statistics?.bounce_rate ?? null,
-      revenue: results.statistics?.revenue_per_recipient ?? null,
-      recipients: results.statistics?.unique_recipients ?? null,
-    };
-  } catch {
-    return null;
-  }
-}
-
-export async function syncKlaviyo() {
+export async function syncKlaviyo(options = {}) {
   if (!config.klaviyo.apiKey) {
     console.warn('Klaviyo API key not configured, skipping sync');
-    return 0;
+    return { records: 0, skipped: true, reason: 'Klaviyo API key not configured' };
   }
 
-  console.log('Syncing Klaviyo campaigns...');
-  const campaigns = await fetchCampaigns();
+  const fullSync = options.fullSync === true;
+  const daysBack = options.daysBack || DEFAULT_RECENT_DAYS;
+  const onProgress = typeof options.onProgress === 'function' ? options.onProgress : () => {};
+
+  console.log(`Syncing Klaviyo campaigns (${fullSync ? 'full sync' : `last ${daysBack} days`})...`);
+  onProgress({ step_pct: 5, detail: 'Loading campaign list' });
+  const campaigns = await fetchCampaigns({ fullSync, daysBack });
   const now = new Date().toISOString();
   let count = 0;
 
+  onProgress({
+    step_pct: campaigns.length ? 10 : 100,
+    detail: campaigns.length ? `Checking ${campaigns.length} campaigns` : 'No campaigns to sync',
+    processed: 0,
+    total: campaigns.length,
+  });
+
   for (const campaign of campaigns) {
     const attrs = campaign.attributes || {};
-    const metrics = await fetchCampaignMetrics(campaign.id);
+    const sendTime = getCampaignTimestamp(attrs);
+    const existing = getKlaviyoCampaignById(campaign.id);
+    onProgress({
+      step_pct: campaigns.length ? Math.round(10 + ((count / campaigns.length) * 85)) : 95,
+      detail: `Syncing metadata for ${attrs.name || campaign.id}`,
+      processed: count,
+      total: campaigns.length,
+    });
 
     upsertKlaviyoCampaign({
       id: campaign.id,
       name: attrs.name || null,
       subject: attrs.send_options?.subject || null,
-      send_time: attrs.send_time || attrs.created_at || null,
-      open_rate: metrics?.open_rate ?? null,
-      click_rate: metrics?.click_rate ?? null,
-      bounce_rate: metrics?.bounce_rate ?? null,
-      revenue: metrics?.revenue ?? null,
-      recipients: metrics?.recipients ?? null,
+      send_time: sendTime,
+      opens: null,
+      open_rate: null,
+      clicks: null,
+      click_rate: null,
+      bounces: null,
+      bounce_rate: null,
+      revenue: null,
+      recipients: null,
       synced_at: now,
+      metadata_synced_at: now,
+      csv_imported_at: existing?.csv_imported_at ?? null,
+      metrics_source: existing?.csv_imported_at ? 'mixed' : (existing?.metrics_source || 'api'),
+      match_key: attrs.name && sendTime ? `${String(attrs.name).trim().toLowerCase().replace(/\s+/g, ' ')}::${sendTime.slice(0, 10)}` : null,
     });
     count++;
   }
 
-  console.log(`Klaviyo sync complete: ${count} campaigns`);
-  return count;
+  console.log(`Klaviyo metadata sync complete: ${count} campaigns`);
+  onProgress({
+    step_pct: 100,
+    detail: `Synced metadata for ${count} campaigns`,
+    processed: count,
+    total: campaigns.length,
+  });
+  return {
+    records: count,
+    metricsRefreshed: 0,
+    metricsSkipped: 0,
+    nextRetryAt: null,
+    mode: fullSync ? 'full' : 'recent',
+    daysBack: fullSync ? null : daysBack,
+    metadataOnly: true,
+  };
+}
+
+export async function backfillKlaviyoHistoricalMetrics(options = {}) {
+  const onProgress = typeof options.onProgress === 'function' ? options.onProgress : () => {};
+  onProgress({
+    step_pct: 100,
+    detail: 'Disabled: use weekly CSV import for Klaviyo metrics',
+    processed: 0,
+    total: 0,
+  });
+  return {
+    records: 0,
+    metricsRefreshed: 0,
+    metricsSkipped: 0,
+    mode: 'background_backfill',
+    skipped: true,
+    reason: 'Disabled: use weekly CSV import for Klaviyo metrics',
+  };
 }

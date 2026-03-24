@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import KpiCard from './components/KpiCard';
 import ChartWrapper from './components/ChartWrapper';
 import SortableTable from './components/SortableTable';
+import DataFreshnessBanner from './components/DataFreshnessBanner';
 
 const TOOLTIP_STYLE = {
   backgroundColor: '#fff',
@@ -13,6 +14,140 @@ const TOOLTIP_STYLE = {
 };
 
 const PIE_COLORS = ['#000000', '#666666', '#93C47D', '#6AA84F', '#F9CB9C', '#999999', '#38761D', '#FFE599'];
+const TRAFFIC_SOURCE_LIMIT = 6;
+const TRAFFIC_SOURCE_GROUPS = [
+  {
+    key: 'direct',
+    label: 'Direct / Unknown',
+    matches: [
+      'direct',
+      '(direct)',
+      'none',
+      '(none)',
+      '(not set)',
+      'not set',
+      'unassigned',
+      'unknown',
+    ],
+  },
+  {
+    key: 'search',
+    label: 'Search',
+    patterns: [
+      /^google$/,
+      /^bing$/,
+      /^yahoo$/,
+      /^duckduckgo$/,
+      /^baidu$/,
+      /^yandex$/,
+      /^ecosia$/,
+      /(?:^|[\s.])search(?:$|[\s.])/,
+      /(?:^|[\s.])bing\.com$/,
+      /(?:^|[\s.])google\.com$/,
+      /(?:^|[\s.])yahoo\.com$/,
+      /(?:^|[\s.])duckduckgo\.com$/,
+    ],
+  },
+  {
+    key: 'social',
+    label: 'Social',
+    matches: [
+      'facebook',
+      'instagram',
+      'linkedin',
+      'twitter',
+      'x.com',
+      't.co',
+      'threads',
+      'reddit',
+      'pinterest',
+      'youtube',
+      'tiktok',
+      'snapchat',
+      'mastodon',
+      'bluesky',
+    ],
+  },
+  {
+    key: 'email',
+    label: 'Email / Newsletter',
+    matches: [
+      'email',
+      'newsletter',
+      'mailchimp',
+      'klaviyo',
+      'substack',
+      'campaign',
+      'sendgrid',
+      'mailerlite',
+      'beehiiv',
+      'convertkit',
+    ],
+  },
+  {
+    key: 'internal',
+    label: 'Internal / tools',
+    matches: [
+      'master',
+      'navbar',
+      'gating',
+      'activemembers',
+      'contact list',
+      'repeat client',
+      'one time purchase',
+      'never purchased',
+      'stripe',
+      'formstack',
+      'salesforce',
+      'lightning.force.com',
+      'workfront',
+      'docs.google.com',
+      'mail.google.com',
+      'teams.cdn.office.net',
+      'officeapps.live.com',
+      'zoom.us',
+    ],
+  },
+  {
+    key: 'ai',
+    label: 'AI Tools',
+    matches: [
+      'chatgpt',
+      'openai',
+      'perplexity',
+      'claude',
+      'anthropic',
+      'gemini',
+      'copilot',
+      'poe',
+      'you.com',
+    ],
+  },
+];
+
+const KNOWN_DOMAIN_LABELS = {
+  'substack.com': 'Substack',
+  'beehiiv.com': 'Beehiiv',
+  'facebook.com': 'Facebook',
+  'instagram.com': 'Instagram',
+  'pinterest.com': 'Pinterest',
+  'google.com': 'Google',
+  'linkedin.com': 'LinkedIn',
+  'yahoo.com': 'Yahoo',
+  'bing.com': 'Bing',
+  'duckduckgo.com': 'DuckDuckGo',
+  'ecosia.org': 'Ecosia',
+  'openai.com': 'OpenAI',
+  'anthropic.com': 'Anthropic',
+  'perplexity.ai': 'Perplexity',
+  'capitalone.com': 'Capital One',
+  'salesforce.com': 'Salesforce',
+  'zoom.us': 'Zoom',
+  'microsoft.com': 'Microsoft',
+  'apple.com': 'Apple',
+  'canva.com': 'Canva',
+  'adobe.com': 'Adobe',
+};
 
 function fmt(n) {
   if (n == null) return '—';
@@ -33,6 +168,192 @@ function formatDuration(secs) {
   return m > 0 ? `${m}m ${s}s` : `${s}s`;
 }
 
+function normalizeTrafficSourceName(source) {
+  const raw = String(source || '').trim();
+  if (!raw) return 'Unknown';
+  const lowered = raw.toLowerCase();
+  if (lowered.startsWith('http://') || lowered.startsWith('https://')) {
+    try {
+      const host = new URL(raw).hostname.replace(/^www\./, '');
+      return host || raw;
+    } catch {
+      return raw;
+    }
+  }
+  return raw.replace(/^www\./, '');
+}
+
+function getHostnameFromSource(source) {
+  const raw = String(source || '').trim();
+  if (!raw) return '';
+  const normalized = normalizeTrafficSourceName(raw);
+
+  if (normalized.includes('://')) {
+    try {
+      return new URL(normalized).hostname.toLowerCase();
+    } catch {
+      return normalized.toLowerCase();
+    }
+  }
+
+  return normalized.toLowerCase();
+}
+
+function getRootDomain(hostname) {
+  const host = String(hostname || '').toLowerCase().replace(/^www\./, '');
+  if (!host.includes('.')) return host;
+
+  const parts = host.split('.');
+  if (parts.length <= 2) return host;
+
+  const suffix = parts.slice(-2).join('.');
+  const multiLevelSuffixes = new Set([
+    'co.uk', 'org.uk', 'ac.uk',
+    'com.au', 'net.au', 'org.au',
+    'co.nz', 'org.nz',
+    'co.jp', 'ne.jp',
+    'com.br', 'com.mx', 'com.ar',
+    'co.in', 'co.za', 'co.kr',
+    'com.sg', 'com.tr',
+  ]);
+
+  if (multiLevelSuffixes.has(suffix) && parts.length >= 3) {
+    return parts.slice(-3).join('.');
+  }
+
+  return parts.slice(-2).join('.');
+}
+
+function formatDomainLabel(domain) {
+  const normalized = String(domain || '').toLowerCase();
+  if (!normalized) return 'Referral sites';
+  return KNOWN_DOMAIN_LABELS[normalized] || normalized;
+}
+
+function matchesAnyPattern(value, patterns = []) {
+  return patterns.some((pattern) => {
+    if (pattern instanceof RegExp) return pattern.test(value);
+    return value.includes(pattern);
+  });
+}
+
+function classifyTrafficSource(source) {
+  const normalized = normalizeTrafficSourceName(source).toLowerCase();
+  const hostname = getHostnameFromSource(source);
+
+  for (const group of TRAFFIC_SOURCE_GROUPS) {
+    if (group.matches && group.matches.some((match) => normalized.includes(match))) {
+      return { key: group.key, label: group.label };
+    }
+    if (group.patterns && matchesAnyPattern(normalized, group.patterns)) {
+      return { key: group.key, label: group.label };
+    }
+  }
+
+  if (hostname.includes('.') || hostname.includes('/')) {
+    const domain = getRootDomain(hostname);
+    return {
+      key: `referral:${domain}`,
+      label: formatDomainLabel(domain),
+    };
+  }
+
+  return { key: 'other', label: 'Other sources' };
+}
+
+function buildTrafficSourceBuckets(sourceBreakdown) {
+  const topSources = sourceBreakdown.slice(0, TRAFFIC_SOURCE_LIMIT);
+  const tailSources = sourceBreakdown.slice(TRAFFIC_SOURCE_LIMIT);
+
+  const groupedTailMap = new Map();
+  for (const source of tailSources) {
+    const bucket = classifyTrafficSource(source.name);
+    const existing = groupedTailMap.get(bucket.key) || {
+      key: bucket.key,
+      label: bucket.label,
+      value: 0,
+      sourceCount: 0,
+      sources: [],
+    };
+
+    existing.value += source.value;
+    existing.sourceCount += 1;
+    existing.sources.push(source);
+    groupedTailMap.set(bucket.key, existing);
+  }
+
+  const groupedTail = [...groupedTailMap.values()]
+    .sort((a, b) => b.value - a.value)
+    .map((group) => ({
+      ...group,
+      name: `${group.label} (${group.sourceCount} sources)`,
+      isGroup: true,
+      previewSources: group.sources
+        .slice(0, 3)
+        .map((source) => source.name)
+        .join(', '),
+    }));
+
+  return { topSources, groupedTail, tailSources };
+}
+
+function buildTrafficSourceExportText({ sourceBreakdown, topSources, groupedTail, totalSessions }) {
+  const lines = [
+    'Google Analytics traffic sources',
+    `Total sessions: ${fmt(totalSessions)}`,
+    '',
+    'Top sources',
+  ];
+
+  topSources.forEach((source, index) => {
+    lines.push(`${index + 1}. ${normalizeTrafficSourceName(source.name)}\t${source.value}`);
+  });
+
+  if (groupedTail.length > 0) {
+    lines.push('');
+    lines.push('Grouped long-tail sources');
+    groupedTail.forEach((group) => {
+      const preview = group.previewSources ? ` - ${group.previewSources}` : '';
+      lines.push(`${group.label} (${group.sourceCount} sources)\t${group.value}${preview}`);
+    });
+  }
+
+  lines.push('');
+  lines.push('Full source list');
+  lines.push('Source\tSessions');
+  sourceBreakdown.forEach((source) => {
+    lines.push(`${normalizeTrafficSourceName(source.name)}\t${source.value}`);
+  });
+
+  return lines.join('\n');
+}
+
+async function copyOrExportTrafficSources(text) {
+  if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return 'Copied to clipboard';
+    } catch {
+      // Fall through to the file download fallback.
+    }
+  }
+
+  if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+    const blob = new Blob([text], { type: 'text/csv;charset=utf-8;' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `google-analytics-traffic-sources-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+    return 'Downloaded CSV';
+  }
+
+  return 'Unable to export';
+}
+
 const TABLE_COLUMNS = [
   { key: 'page_path', label: 'Page', align: 'left' },
   { key: 'total_views', label: 'Views', align: 'right', format: v => v?.toLocaleString() },
@@ -42,9 +363,11 @@ const TABLE_COLUMNS = [
   { key: 'avg_bounce', label: 'Bounce Rate', align: 'right', format: v => v != null ? (v * 100).toFixed(1) + '%' : '—' },
 ];
 
-export default function GoogleAnalyticsTab({ dateRange }) {
+export default function GoogleAnalyticsTab({ dateRange, syncStatus }) {
   const [gaData, setGaData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [showAllSources, setShowAllSources] = useState(false);
+  const [copyStatus, setCopyStatus] = useState('');
 
   useEffect(() => {
     setLoading(true);
@@ -75,6 +398,7 @@ export default function GoogleAnalyticsTab({ dateRange }) {
   }
 
   const { pages, traffic } = gaData;
+  const totalRecords = pages.length + traffic.length;
 
   // Aggregate pages by date for time series
   const viewsByDate = {};
@@ -88,9 +412,18 @@ export default function GoogleAnalyticsTab({ dateRange }) {
   for (const t of traffic) {
     sessionsBySource[t.source] = (sessionsBySource[t.source] || 0) + t.sessions;
   }
-  const donutData = Object.entries(sessionsBySource)
+  const sourceBreakdown = Object.entries(sessionsBySource)
     .sort(([, a], [, b]) => b - a)
     .map(([source, sessions]) => ({ name: source, value: sessions }));
+  const { topSources, groupedTail, tailSources } = buildTrafficSourceBuckets(sourceBreakdown);
+  const remainingSources = tailSources;
+  const otherSessions = remainingSources.reduce((sum, source) => sum + source.value, 0);
+  const donutData = otherSessions > 0
+    ? [...topSources, { name: 'Other', value: otherSessions }]
+    : topSources;
+  const visibleSourceList = showAllSources
+    ? sourceBreakdown
+    : [...topSources, ...groupedTail];
 
   // Aggregate pages by path for table
   const pageAgg = {};
@@ -119,9 +452,23 @@ export default function GoogleAnalyticsTab({ dateRange }) {
   const totalViews = pages.reduce((s, p) => s + (p.page_views || 0), 0);
   const totalSessions = pages.reduce((s, p) => s + (p.sessions || 0), 0);
   const avgEngagement = pages.length ? pages.reduce((s, p) => s + (p.engagement_rate || 0), 0) / pages.length : null;
+  const exportText = buildTrafficSourceExportText({
+    sourceBreakdown,
+    topSources,
+    groupedTail,
+    totalSessions,
+  });
+
+  const handleCopySources = async () => {
+    const status = await copyOrExportTrafficSources(exportText);
+    setCopyStatus(status);
+    window.setTimeout(() => setCopyStatus(''), 2500);
+  };
 
   return (
     <div className="space-y-6">
+      <DataFreshnessBanner source="Google Analytics" status={syncStatus} dataCount={totalRecords} />
+
       {/* KPI Cards */}
       <div className="grid grid-cols-3 gap-4">
         <KpiCard label="Total Page Views" value={fmt(totalViews)} />
@@ -145,17 +492,79 @@ export default function GoogleAnalyticsTab({ dateRange }) {
           </ChartWrapper>
         </div>
         <ChartWrapper title="Traffic Sources">
-          <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
-              <Pie data={donutData} cx="50%" cy="45%" innerRadius={60} outerRadius={90} paddingAngle={2} dataKey="value" nameKey="name">
-                {donutData.map((_, i) => (
-                  <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
-                ))}
-              </Pie>
-              <Tooltip contentStyle={TOOLTIP_STYLE} formatter={v => [v.toLocaleString() + ' sessions', '']} />
-              <Legend wrapperStyle={{ fontFamily: '"Libre Baskerville"', fontSize: 11 }} />
-            </PieChart>
-          </ResponsiveContainer>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs font-serif text-prior-muted">
+                Showing the top sources first, with the long tail grouped into readable buckets.
+              </p>
+              <button
+                type="button"
+                onClick={handleCopySources}
+                className="shrink-0 rounded-full border border-prior-border px-3 py-1 text-xs font-serif text-prior-body hover:border-prior-black hover:text-prior-black"
+              >
+                Copy / export source list
+              </button>
+            </div>
+
+            <ResponsiveContainer width="100%" height={240}>
+              <PieChart>
+                <Pie data={donutData} cx="50%" cy="50%" innerRadius={60} outerRadius={90} paddingAngle={2} dataKey="value" nameKey="name">
+                  {donutData.map((_, i) => (
+                    <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip contentStyle={TOOLTIP_STYLE} formatter={v => [v.toLocaleString() + ' sessions', '']} />
+              </PieChart>
+            </ResponsiveContainer>
+
+            {copyStatus && (
+              <div className="text-xs font-serif text-prior-body">
+                {copyStatus}
+              </div>
+            )}
+
+            <div className="space-y-2">
+              {visibleSourceList.map((source, index) => (
+                <div key={source.name} className="flex items-start justify-between gap-3 rounded-lg border border-transparent py-1 text-sm">
+                  <div className="flex items-start gap-2 min-w-0">
+                    <span
+                      className="mt-1 h-2.5 w-2.5 rounded-full flex-shrink-0"
+                      style={{ backgroundColor: PIE_COLORS[index % PIE_COLORS.length] }}
+                    />
+                    <div className="min-w-0">
+                      <div className="truncate text-prior-body font-serif">
+                        {normalizeTrafficSourceName(source.name)}
+                      </div>
+                      {source.isGroup && (
+                        <div className="text-[11px] font-serif text-prior-muted">
+                          {source.name.startsWith('Referral sites')
+                            ? source.previewSources
+                              ? `Top sites: ${source.previewSources}`
+                              : 'Long-tail website referrals grouped together'
+                            : source.previewSources
+                              ? `Top sources: ${source.previewSources}`
+                              : 'Grouped long-tail traffic'}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <span className="text-prior-black font-serif flex-shrink-0">{fmt(source.value)}</span>
+                </div>
+              ))}
+
+              {remainingSources.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowAllSources((prev) => !prev)}
+                  className="pt-1 text-xs font-serif text-prior-body underline underline-offset-4 hover:text-prior-black"
+                >
+                  {showAllSources
+                    ? 'Show fewer traffic sources'
+                    : `Show all ${sourceBreakdown.length} traffic sources`}
+                </button>
+              )}
+            </div>
+          </div>
         </ChartWrapper>
       </div>
 

@@ -42,6 +42,15 @@ router.post('/', (req, res, next) => {
       metaTitle: parsed.metaTitle,
       metaDescription: parsed.metaDescription,
       keywords: parsed.keywords,
+      bio: parsed.bio,
+      social: parsed.social,
+      category: parsed.category,
+      location: parsed.location,
+      heroCaption: parsed.heroCaption,
+      keepReading: parsed.keepReading,
+      emailSl: parsed.emailSl,
+      emailPt: parsed.emailPt,
+      captions: parsed.captions,
       articleBody,
     });
   } catch (err) {

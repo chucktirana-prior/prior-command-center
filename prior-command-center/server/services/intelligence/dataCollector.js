@@ -6,25 +6,59 @@ import {
   getInstagramProfile,
 } from '../../db/index.js';
 
-function summarizeKlaviyo(campaigns) {
-  if (!campaigns.length) return { campaigns_count: 0 };
-  const avgOpen = campaigns.reduce((s, c) => s + (c.open_rate || 0), 0) / campaigns.length;
-  const avgClick = campaigns.reduce((s, c) => s + (c.click_rate || 0), 0) / campaigns.length;
-  const totalRevenue = campaigns.reduce((s, c) => s + (c.revenue || 0), 0);
-  const totalRecipients = campaigns.reduce((s, c) => s + (c.recipients || 0), 0);
+function isHubPage(path) {
+  return ['/', '/editorial', '/travel-design', '/city-guides', '/shopping-guides'].includes(path);
+}
 
-  const sorted = [...campaigns].sort((a, b) => (b.open_rate || 0) - (a.open_rate || 0));
+function summarizeKlaviyo(campaigns) {
+  if (!campaigns.length) return { campaigns_count: 0, metric_campaigns_count: 0 };
+  const metricCampaigns = campaigns.filter((campaign) =>
+    campaign.csv_imported_at != null && (
+      campaign.recipients != null || campaign.open_rate != null || campaign.click_rate != null || campaign.bounce_rate != null
+    )
+  );
+  if (!metricCampaigns.length) {
+    return {
+      campaigns_count: campaigns.length,
+      metric_campaigns_count: 0,
+      total_recipients: 0,
+      avg_open_rate: null,
+      avg_click_rate: null,
+      best_campaign: null,
+      worst_campaign: null,
+      recent_campaigns: [],
+    };
+  }
+
+  const avgOpen = metricCampaigns.reduce((s, c) => s + (c.open_rate || 0), 0) / metricCampaigns.length;
+  const avgClick = metricCampaigns.reduce((s, c) => s + (c.click_rate || 0), 0) / metricCampaigns.length;
+  const totalRecipients = metricCampaigns.reduce((s, c) => s + (c.recipients || 0), 0);
+
+  const sorted = [...metricCampaigns].sort((a, b) => (b.open_rate || 0) - (a.open_rate || 0));
   const best = sorted[0];
   const worst = sorted[sorted.length - 1];
+  const recentCampaigns = [...metricCampaigns]
+    .sort((a, b) => new Date(b.send_time || 0) - new Date(a.send_time || 0))
+    .slice(0, 6)
+    .map((campaign) => ({
+      name: campaign.name,
+      subject: campaign.subject,
+      send_time: campaign.send_time,
+      recipients: campaign.recipients,
+      open_rate: campaign.open_rate,
+      click_rate: campaign.click_rate,
+      bounce_rate: campaign.bounce_rate,
+    }));
 
   return {
     campaigns_count: campaigns.length,
+    metric_campaigns_count: metricCampaigns.length,
     avg_open_rate: +avgOpen.toFixed(4),
     avg_click_rate: +avgClick.toFixed(4),
-    total_revenue: totalRevenue,
     total_recipients: totalRecipients,
     best_campaign: { name: best.name, open_rate: best.open_rate, click_rate: best.click_rate },
     worst_campaign: { name: worst.name, open_rate: worst.open_rate, click_rate: worst.click_rate },
+    recent_campaigns: recentCampaigns,
   };
 }
 
@@ -43,6 +77,10 @@ function summarizeGA(pages, traffic) {
     .sort(([, a], [, b]) => b - a)
     .slice(0, 5)
     .map(([path, views]) => ({ path, views }));
+  const topFeaturePage = Object.entries(pageAgg)
+    .sort(([, a], [, b]) => b - a)
+    .map(([path, views]) => ({ path, views }))
+    .find((page) => !isHubPage(page.path)) || topPages[0] || null;
 
   // Traffic source breakdown
   const sourceAgg = {};
@@ -60,6 +98,7 @@ function summarizeGA(pages, traffic) {
     avg_engagement_rate: +avgEngagement.toFixed(4),
     avg_bounce_rate: +avgBounce.toFixed(4),
     top_pages: topPages,
+    top_feature_page: topFeaturePage,
     traffic_sources: trafficSources,
   };
 }

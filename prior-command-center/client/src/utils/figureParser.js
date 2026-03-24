@@ -6,23 +6,37 @@
  *
  * Returns an array of { index, fullMatch, src, alt, caption }.
  */
+const FIGURE_BLOCK_RE = /<figure>\s*<img\b([^>]*)>\s*<figcaption>([\s\S]*?)<\/figcaption>\s*<\/figure>/gi;
+const ATTRIBUTE_RE = /([a-zA-Z_:][\w:.-]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|“([^”]*)”|‘([^’]*)’)/g;
+
+function parseAttributes(attributeString) {
+  const attributes = {};
+  let match;
+
+  while ((match = ATTRIBUTE_RE.exec(attributeString)) !== null) {
+    const [, name, doubleQuoted, singleQuoted, smartDoubleQuoted, smartSingleQuoted] = match;
+    attributes[name.toLowerCase()] = doubleQuoted ?? singleQuoted ?? smartDoubleQuoted ?? smartSingleQuoted ?? '';
+  }
+
+  return attributes;
+}
+
 export function extractFigures(markdown) {
   if (!markdown) return [];
-
-  const FIGURE_RE =
-    /<figure>\s*<img\s+src="([^"]*)"\s+alt="([^"]*)"\s*\/?\s*>\s*<figcaption>(.*?)<\/figcaption>\s*<\/figure>/gi;
 
   const figures = [];
   let match;
   let index = 0;
 
-  while ((match = FIGURE_RE.exec(markdown)) !== null) {
+  while ((match = FIGURE_BLOCK_RE.exec(markdown)) !== null) {
+    const attributes = parseAttributes(match[1] || '');
+
     figures.push({
       index,
       fullMatch: match[0],
-      src: match[1],
-      alt: match[2],
-      caption: match[3],
+      src: attributes.src || '',
+      alt: attributes.alt || '',
+      caption: match[2] || '',
     });
     index++;
   }
@@ -31,25 +45,30 @@ export function extractFigures(markdown) {
 }
 
 /**
- * Replace figure src placeholders in markdown with actual Contentful URLs.
+ * Replace figure src placeholders in markdown.
  *
  * @param {string} markdown - The original markdown
  * @param {Map<number, string>} figureUrlMap - Maps figure index to Contentful asset URL
  * @returns {string} Updated markdown with real URLs
  */
 export function replaceFigureSrcs(markdown, figureUrlMap) {
-  if (!markdown || figureUrlMap.size === 0) return markdown;
+  if (!markdown) return markdown;
+  if (figureUrlMap.size === 0) return markdown;
 
   let index = 0;
   return markdown.replace(
-    /<figure>\s*<img\s+src="([^"]*)"\s+alt="([^"]*)"\s*\/?\s*>\s*<figcaption>(.*?)<\/figcaption>\s*<\/figure>/gi,
-    (fullMatch, src, alt, caption) => {
+    FIGURE_BLOCK_RE,
+    (fullMatch, attributeString) => {
       const currentIndex = index++;
       const newUrl = figureUrlMap.get(currentIndex);
-      if (newUrl) {
-        return fullMatch.replace(`src="${src}"`, `src="${newUrl}"`);
-      }
-      return fullMatch;
+      if (!newUrl) return fullMatch;
+
+      const updatedAttributes = (attributeString || '').replace(
+        /(src\s*=\s*)(?:"([^"]*)"|'([^']*)'|“([^”]*)”|‘([^’]*)’)/i,
+        (_, prefix) => `${prefix}"${newUrl}"`
+      );
+
+      return fullMatch.replace(attributeString, updatedAttributes);
     }
   );
 }

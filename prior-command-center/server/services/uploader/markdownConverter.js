@@ -92,7 +92,8 @@ function convertToMarkdown(bodyLines, bodyFontSize) {
   if (currentParagraph) paragraphs.push(currentParagraph.join(' '));
   if (currentHtml) paragraphs.push(currentHtml.join(' '));
 
-  return paragraphs.join('\n\n').trim();
+  const markdown = paragraphs.join('\n\n').trim();
+  return normalizeGuideMarkdown(markdown);
 }
 
 function isBoldHeading(runs) {
@@ -185,6 +186,30 @@ function buildFormattedLine(runs, options = {}) {
 
 function formatKey(run, stripBold = false) {
   return `${!stripBold && run.bold ? 'b' : ''}${run.italic ? 'i' : ''}${run.link || ''}`;
+}
+
+function normalizeGuideMarkdown(markdown) {
+  if (!markdown) return markdown;
+
+  return normalizeFigureBlockWhitespace(
+    normalizeGuideSectionHeadings(markdown)
+  );
+}
+
+function normalizeGuideSectionHeadings(markdown) {
+  return markdown.replace(/^(#{1,6})\s+(Stay|Eat|See|Shop)\s*$/gm, (_, hashes, section) => {
+    return `${hashes} Where to ${section}`;
+  });
+}
+
+function normalizeFigureBlockWhitespace(markdown) {
+  return markdown.replace(
+    /<figure>\s*<img\b([\s\S]*?)>\s*<figcaption>([\s\S]*?)<\/figcaption>\s*<\/figure>/gi,
+    (_, attributes, caption) => {
+      const normalizedCaption = caption.replace(/\s+/g, ' ').trim();
+      return `<figure><img${attributes}><figcaption>${normalizedCaption}</figcaption></figure>`;
+    }
+  );
 }
 
 export { convertToMarkdown };

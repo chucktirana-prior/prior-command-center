@@ -80,6 +80,7 @@ router.post('/chat', async (req, res) => {
     res.flushHeaders();
 
     const client = new Anthropic({ apiKey: config.anthropic.apiKey });
+    let streamClosed = false;
 
     const stream = client.messages.stream({
       model: SONNET_MODEL,
@@ -92,26 +93,42 @@ router.post('/chat', async (req, res) => {
     });
 
     stream.on('text', (text) => {
+      streamClosed = false;
       res.write(`data: ${JSON.stringify({ type: 'text', text })}\n\n`);
     });
 
     stream.on('error', (error) => {
+      if (error?.name === 'APIUserAbortError') {
+        return;
+      }
+
       console.error('[assistant] Stream error:', error.message);
-      res.write(`data: ${JSON.stringify({ type: 'error', error: error.message })}\n\n`);
-      res.end();
+      if (!res.writableEnded) {
+        res.write(`data: ${JSON.stringify({ type: 'error', error: error.message })}\n\n`);
+        res.end();
+      }
     });
 
     stream.on('end', () => {
-      res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`);
-      res.end();
+      streamClosed = true;
+      if (!res.writableEnded) {
+        res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`);
+        res.end();
+      }
     });
 
-    // Handle client disconnect
-    req.on('close', () => {
-      stream.abort();
+    // Abort only if the response stream is actually disconnected early.
+    res.on('close', () => {
+      if (!streamClosed && !res.writableEnded) {
+        stream.abort();
+      }
     });
 
   } catch (err) {
+    if (err?.name === 'APIUserAbortError') {
+      return;
+    }
+
     console.error('[assistant] Error:', err.message);
     if (!res.headersSent) {
       res.status(500).json({ ok: false, error: err.message });

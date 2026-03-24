@@ -3,15 +3,27 @@ import { useState, useEffect } from 'react';
 export default function CategoryPicker({ selected, onChange }) {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     fetch('/api/contentful/categories')
-      .then((res) => res.json())
+      .then(async (res) => {
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || 'Failed to load categories');
+        }
+        return data;
+      })
       .then((data) => {
-        setCategories(data);
+        setCategories(Array.isArray(data) ? data : []);
+        setError('');
         setLoading(false);
       })
-      .catch(() => setLoading(false));
+      .catch((err) => {
+        setCategories([]);
+        setError(err.message);
+        setLoading(false);
+      });
   }, []);
 
   function toggleCategory(cat) {
@@ -28,6 +40,11 @@ export default function CategoryPicker({ selected, onChange }) {
   return (
     <div className="category-picker">
       <label>Categories</label>
+      {error && (
+        <div className="warning-banner">
+          Categories unavailable: {error}
+        </div>
+      )}
       <div className="category-tags">
         {categories.map((cat) => {
           const isActive = selected.some((s) => s.id === cat.id);
@@ -43,7 +60,7 @@ export default function CategoryPicker({ selected, onChange }) {
           );
         })}
       </div>
-      {categories.length === 0 && <p className="muted">No categories found.</p>}
+      {!error && categories.length === 0 && <p className="muted">No categories found.</p>}
     </div>
   );
 }

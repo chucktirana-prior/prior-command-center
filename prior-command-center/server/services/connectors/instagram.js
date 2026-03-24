@@ -2,15 +2,30 @@ import config from '../../config.js';
 import { upsertInstagramPost, upsertInstagramProfile } from '../../db/index.js';
 
 const GRAPH_URL = 'https://graph.facebook.com/v21.0';
+const REQUEST_TIMEOUT_MS = 15000;
 
 function isConfigured() {
   return config.instagram.accessToken && config.instagram.businessAccountId;
 }
 
+async function fetchWithTimeout(url, options = {}) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  try {
+    return await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 async function igFetch(url) {
   const separator = url.includes('?') ? '&' : '?';
   const fullUrl = `${url}${separator}access_token=${config.instagram.accessToken}`;
-  const res = await fetch(fullUrl);
+  const res = await fetchWithTimeout(fullUrl);
 
   if (res.status === 429) {
     console.log('Instagram rate limited, waiting 60s...');
@@ -26,17 +41,40 @@ async function igFetch(url) {
   return res.json();
 }
 
-async function fetchMedia() {
+function getRecentCutoffIso(daysBack) {
+  const cutoff = new Date();
+  cutoff.setUTCDate(cutoff.getUTCDate() - daysBack);
+  return cutoff.toISOString();
+}
+
+function isRecent(timestamp, cutoffIso) {
+  if (!timestamp || !cutoffIso) {
+    return false;
+  }
+
+  return new Date(timestamp).getTime() >= new Date(cutoffIso).getTime();
+}
+
+async function fetchMedia({ fullSync = false, daysBack = config.instagram.syncDays } = {}) {
   const posts = [];
   const accountId = config.instagram.businessAccountId;
   let url = `${GRAPH_URL}/${accountId}/media?fields=id,caption,media_type,permalink,thumbnail_url,timestamp&limit=50`;
+  const cutoffIso = fullSync ? null : getRecentCutoffIso(daysBack);
+  let reachedOlderPosts = false;
 
   while (url) {
     const data = await igFetch(url);
     if (data.data) {
-      posts.push(...data.data);
+      for (const post of data.data) {
+        if (!cutoffIso || isRecent(post.timestamp, cutoffIso)) {
+          posts.push(post);
+          continue;
+        }
+
+        reachedOlderPosts = true;
+      }
     }
-    url = data.paging?.next || null;
+    url = reachedOlderPosts ? null : (data.paging?.next || null);
   }
 
   return posts;
@@ -68,13 +106,13 @@ async function refreshTokenIfNeeded() {
   // Long-lived tokens last 60 days. This refreshes the token.
   // In production, you'd track the expiry and only refresh when needed.
   try {
-    const url = `${GRAPH_URL}/oauth/access_token?grant_type=fb_exchange_token&client_id=${process.env.META_APP_ID || ''}&client_secret=${process.env.META_APP_SECRET || ''}&fb_exchange_token=${config.instagram.accessToken}`;
+    const url = `${GRAPH_URL}/oauth/access_token?grant_type=fb_exchange_token&client_id=${config.instagram.appId || ''}&client_secret=${config.instagram.appSecret || ''}&fb_exchange_token=${config.instagram.accessToken}`;
 
-    if (!process.env.META_APP_ID || !process.env.META_APP_SECRET) {
+    if (!config.instagram.appId || !config.instagram.appSecret) {
       return; // Can't refresh without app credentials
     }
 
-    const res = await fetch(url);
+    const res = await fetchWithTimeout(url);
     if (res.ok) {
       const data = await res.json();
       if (data.access_token) {
@@ -86,13 +124,16 @@ async function refreshTokenIfNeeded() {
   }
 }
 
-export async function syncInstagram() {
+export async function syncInstagram(options = {}) {
   if (!isConfigured()) {
     console.warn('Instagram not fully configured, skipping sync');
-    return 0;
+    return { records: 0, skipped: true, reason: 'Instagram credentials are incomplete' };
   }
 
-  console.log('Syncing Instagram...');
+  const fullSync = options.fullSync === true;
+  const daysBack = options.daysBack || config.instagram.syncDays;
+
+  console.log(`Syncing Instagram (${fullSync ? 'full sync' : `last ${daysBack} days`})...`);
   await refreshTokenIfNeeded();
 
   const now = new Date().toISOString();
@@ -100,7 +141,7 @@ export async function syncInstagram() {
   let count = 0;
 
   // Fetch and upsert posts with insights
-  const posts = await fetchMedia();
+  const posts = await fetchMedia({ fullSync, daysBack });
   for (const post of posts) {
     const insights = await fetchPostInsights(post.id);
 
@@ -136,5 +177,9 @@ export async function syncInstagram() {
   console.log('  Instagram profile snapshot saved');
 
   console.log(`Instagram sync complete: ${count} total records`);
-  return count;
+  return {
+    records: count,
+    mode: fullSync ? 'full' : 'recent',
+    daysBack: fullSync ? null : daysBack,
+  };
 }

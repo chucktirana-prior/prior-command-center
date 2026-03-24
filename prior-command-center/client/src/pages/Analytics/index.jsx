@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import DateRangePicker from './components/DateRangePicker';
 import SyncStatus from './components/SyncStatus';
 import OverviewTab from './OverviewTab';
@@ -25,6 +25,16 @@ function computeInitialRange() {
 export default function Analytics() {
   const [activeTab, setActiveTab] = useState('overview');
   const [dateRange, setDateRange] = useState(computeInitialRange);
+  const [syncStatus, setSyncStatus] = useState({});
+
+  useEffect(() => {
+    fetch('/api/sync/status')
+      .then((res) => res.json())
+      .then((json) => {
+        if (json.ok) setSyncStatus(json.status || {});
+      })
+      .catch(() => {});
+  }, []);
 
   return (
     <div>
@@ -55,10 +65,10 @@ export default function Analytics() {
       </div>
 
       {/* Tab content */}
-      {activeTab === 'overview' && <OverviewTab dateRange={dateRange} onNavigateToInsights={() => setActiveTab('insights')} />}
-      {activeTab === 'klaviyo' && <KlaviyoTab dateRange={dateRange} />}
-      {activeTab === 'ga' && <GoogleAnalyticsTab dateRange={dateRange} />}
-      {activeTab === 'instagram' && <InstagramTab dateRange={dateRange} />}
+      {activeTab === 'overview' && <OverviewTab dateRange={dateRange} syncStatus={syncStatus} onNavigateToInsights={() => setActiveTab('insights')} />}
+      {activeTab === 'klaviyo' && <KlaviyoTab dateRange={dateRange} syncStatus={syncStatus.klaviyo} />}
+      {activeTab === 'ga' && <GoogleAnalyticsTab dateRange={dateRange} syncStatus={syncStatus.google_analytics} />}
+      {activeTab === 'instagram' && <InstagramTab dateRange={dateRange} syncStatus={syncStatus.instagram} />}
       {activeTab === 'insights' && <InsightsTab dateRange={dateRange} />}
     </div>
   );

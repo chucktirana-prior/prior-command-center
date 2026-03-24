@@ -84,19 +84,22 @@ function formatGaDate(raw) {
   return raw;
 }
 
-export async function syncGoogleAnalytics() {
+export async function syncGoogleAnalytics(options = {}) {
   if (!isConfigured()) {
     console.warn('Google Analytics not fully configured, skipping sync');
-    return 0;
+    return { records: 0, skipped: true, reason: 'Google Analytics credentials are incomplete' };
   }
 
+  const onProgress = typeof options.onProgress === 'function' ? options.onProgress : () => {};
   console.log('Syncing Google Analytics...');
+  onProgress({ step_pct: 10, detail: 'Connecting to Google Analytics' });
   const client = createClient();
   const propertyId = config.googleAnalytics.propertyId;
   const now = new Date().toISOString();
   let count = 0;
 
   // Page metrics
+  onProgress({ step_pct: 20, detail: 'Fetching page metrics' });
   const pages = await fetchPageMetrics(client, propertyId);
   for (const page of pages) {
     upsertGaPage({ ...page, synced_at: now });
@@ -105,6 +108,7 @@ export async function syncGoogleAnalytics() {
   console.log(`  GA pages: ${pages.length} rows`);
 
   // Traffic sources
+  onProgress({ step_pct: 65, detail: 'Fetching traffic sources', processed: pages.length, total: pages.length });
   const traffic = await fetchTrafficSources(client, propertyId);
   for (const row of traffic) {
     upsertGaTraffic({ ...row, synced_at: now });
@@ -113,5 +117,6 @@ export async function syncGoogleAnalytics() {
   console.log(`  GA traffic: ${traffic.length} rows`);
 
   console.log(`Google Analytics sync complete: ${count} total rows`);
+  onProgress({ step_pct: 100, detail: `Synced ${count.toLocaleString()} GA rows`, processed: count, total: count });
   return count;
 }

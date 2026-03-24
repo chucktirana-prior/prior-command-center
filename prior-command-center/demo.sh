@@ -8,12 +8,12 @@ echo "🏢 Starting Prior Command Center..."
 echo ""
 
 # Kill any existing processes on our ports
-lsof -ti:3001 | xargs kill -9 2>/dev/null
+lsof -ti:3002 | xargs kill -9 2>/dev/null
 lsof -ti:5173 | xargs kill -9 2>/dev/null
 sleep 1
 
 # Start Express backend
-echo "  Starting backend on :3001..."
+echo "  Starting backend on :3002..."
 node server/index.js &
 BACKEND_PID=$!
 sleep 2

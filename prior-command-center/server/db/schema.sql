@@ -4,12 +4,31 @@ CREATE TABLE IF NOT EXISTS klaviyo_campaigns (
   name TEXT,
   subject TEXT,
   send_time TEXT,
+  opens INTEGER,
   open_rate REAL,
+  clicks INTEGER,
   click_rate REAL,
+  bounces INTEGER,
   bounce_rate REAL,
   revenue REAL,
   recipients INTEGER,
-  synced_at TEXT
+  synced_at TEXT,
+  metadata_synced_at TEXT,
+  csv_imported_at TEXT,
+  metrics_source TEXT DEFAULT 'api',
+  match_key TEXT
+);
+
+CREATE TABLE IF NOT EXISTS klaviyo_import_review (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  imported_at TEXT NOT NULL,
+  source_file TEXT,
+  campaign_id TEXT,
+  campaign_name TEXT,
+  subject TEXT,
+  send_time TEXT,
+  reason TEXT NOT NULL,
+  row_data TEXT NOT NULL
 );
 
 -- Google Analytics page metrics
@@ -74,6 +93,25 @@ CREATE TABLE IF NOT EXISTS sync_log (
   duration_ms INTEGER
 );
 
+-- Background jobs for resumable tasks
+CREATE TABLE IF NOT EXISTS background_jobs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  job_key TEXT NOT NULL,
+  source TEXT NOT NULL,
+  status TEXT NOT NULL,
+  progress_pct INTEGER DEFAULT 0,
+  processed INTEGER DEFAULT 0,
+  total INTEGER DEFAULT 0,
+  detail TEXT,
+  metrics_refreshed INTEGER DEFAULT 0,
+  mode TEXT,
+  error_message TEXT,
+  next_retry_at TEXT,
+  started_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  completed_at TEXT
+);
+
 -- Intelligence engine insights
 CREATE TABLE IF NOT EXISTS insights (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -99,4 +137,46 @@ CREATE TABLE IF NOT EXISTS anomalies (
   severity TEXT NOT NULL,
   message TEXT,
   dismissed INTEGER DEFAULT 0
+);
+
+-- Location monitor imported businesses
+CREATE TABLE IF NOT EXISTS location_places (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  article_id TEXT,
+  article_title TEXT NOT NULL,
+  article_slug TEXT,
+  article_url TEXT,
+  date_published TEXT,
+  section TEXT,
+  business_name TEXT NOT NULL,
+  source_link_text TEXT,
+  website_url TEXT NOT NULL,
+  google_place_id TEXT,
+  maps_query TEXT,
+  address TEXT,
+  phone TEXT,
+  business_status TEXT,
+  is_open INTEGER,
+  check_status TEXT DEFAULT 'pending',
+  confidence REAL,
+  last_checked_at TEXT,
+  first_seen_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(article_id, website_url)
+);
+
+CREATE TABLE IF NOT EXISTS location_checks (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  location_place_id INTEGER NOT NULL,
+  checked_at TEXT NOT NULL,
+  check_status TEXT NOT NULL,
+  business_status TEXT,
+  is_open INTEGER,
+  confidence REAL,
+  place_id TEXT,
+  address TEXT,
+  phone TEXT,
+  raw_response TEXT,
+  error_message TEXT,
+  FOREIGN KEY (location_place_id) REFERENCES location_places(id) ON DELETE CASCADE
 );
