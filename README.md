@@ -1,219 +1,138 @@
-# Place Monitor Alert System
+# PRIOR Claude — Project Directory
 
-An automated monitoring system that tracks places mentioned in your city guides using the Google Maps API and sends notifications when businesses close or change status.
+A collection of internal tools for PRIOR Magazine, built with Node.js, React, and various APIs.
 
-## Features
+---
 
-- 🔍 **Automated Monitoring**: Regular checks of place status using Google Maps Places API
-- 📧 **Email Notifications**: Immediate alerts when places close permanently or temporarily
-- 💬 **Slack Integration**: Optional Slack notifications for team collaboration
-- 📊 **Daily Reports**: Comprehensive status reports with statistics
-- 📱 **Batch Processing**: Efficient API usage with rate limiting
-- 💾 **Data Persistence**: JSON-based storage for places and alert history
-- ⏰ **Flexible Scheduling**: Configurable check intervals
-- 🔧 **Command Line Tools**: Easy management and testing
+## Projects
+
+### 1. PRIOR Command Center (`prior-command-center/`)
+**Status:** Active (demo-ready)
+**Ports:** Backend `3002` | Frontend `5173`
+
+Central dashboard integrating analytics, content management, and AI. Pulls data from multiple sources into a single interface.
+
+- **Stack:** Node.js + Express (ES modules), React 19 + Vite, Tailwind CSS, Recharts, better-sqlite3
+- **Integrations:** Contentful CMA, Claude API (Anthropic), Google Analytics, Instagram/Meta, Klaviyo
+- **Start:** `cd prior-command-center && ./demo.sh` or `npm run dev`
+- **Scheduling:** Syncs data via cron (default: 6am daily)
+
+### 2. Article Uploader (`article-uploader/`)
+**Status:** Active (development)
+**Ports:** Backend `3001` | Frontend `3000`
+
+Parses Google Docs PDF exports and creates draft entries in Contentful. Extracts labeled metadata (hed, dek, slug, author, keywords, etc.) and converts body text to markdown with bold/italic/link formatting.
+
+- **Stack:** Node.js + Express (CommonJS), React + Vite, pdfjs-dist, Multer
+- **Integrations:** Contentful CMA (article, person, category content types)
+- **Start:** Double-click `start-app.command` or `npm run dev`
+- **PDF parsing:** Uses `pdfjs-dist` with `page.getOperatorList()` for font loading; detects bold/italic via PostScript font names; handles Google redirect URL unwrapping and Drive link filtering
+- **Tests:** `node tests/generate-test-pdfs.js` then `node tests/run-parser-tests.js` (170 assertions across 8 test PDFs)
+
+### 3. Article Uploader Stable (`article-uploader-stable/`)
+**Status:** Frozen stable copy
+**Ports:** Backend `3001` | Frontend `3000`
+
+Snapshot of the article uploader at a known-good state. Don't run simultaneously with the development version (same ports).
+
+### 4. Hotel Price Checker (`hotel-price-checker/`)
+**Status:** Active
+**Ports:** Backend `3001` | Frontend (Vite default)
+
+Scrapes hotel pricing and availability data using headless browser automation.
+
+- **Stack:** Node.js + Express + Nodemon, React + Vite, Puppeteer, Cheerio, node-cron
+- **Start:** `npm run dev`
+- **Config:** 45s scraping timeout, 3 max retries, headless mode enabled
+
+### 5. Booking Agent (`booking-agent/`)
+**Status:** Active
+**Ports:** Configured via env
+
+Automated booking system for hotels and restaurants with email notifications.
+
+- **Stack:** Node.js + Express, Puppeteer, Cheerio, Nodemailer, node-cron, Jest
+- **Start:** `npm run dev`
+
+### 6. Location Checker v2 (`locationcheckerv2/`)
+**Status:** Active
+**Type:** Electron desktop app
+
+Desktop application for batch-verifying business locations using Google Maps, web scraping, and sentiment analysis.
+
+- **Stack:** Electron, Puppeteer, Playwright, Cheerio, Google Maps API, Contentful, Nodemailer
+- **Start:** `npm start` (opens Electron window)
+- **Build:** `npm run build` (macOS DMG), `npm run build:win`, `npm run build:linux`
+- **Features:** CSV batch processing, Google Maps verification, web presence analysis, social media scraping, screenshot capture, caching
+
+### 7. Location Checker v1 (`locationcheckv1/`)
+**Status:** Legacy (CLI tool)
+
+Command-line predecessor to v2. Processes CSV files of business locations against the Google Maps API and generates JSON/CSV reports.
+
+- **Stack:** Node.js, Google Maps Places API
+- **Run:** `node application-data-and-logs/check-locations.js`
+- **Output:** Date-organized reports in `application-data-and-logs/output/`
+
+### 8. Editorial LLM (`prior_editorial_llm/`)
+**Status:** Placeholder (empty)
+
+Reserved for future AI-powered editorial content tools.
+
+---
+
+## Port Map
+
+| Port | App |
+|------|-----|
+| `3000` | Article Uploader frontend |
+| `3001` | Article Uploader backend |
+| `3002` | Command Center backend |
+| `5173` | Command Center frontend |
+
+**Note:** Hotel Price Checker and Article Uploader Stable also default to port `3001`. Don't run them at the same time as the Article Uploader without changing their ports first.
+
+---
 
 ## Quick Start
 
-### 1. Installation
-
 ```bash
-npm install
-```
+# Article Uploader (most common)
+cd article-uploader
+npm run dev
+# → Backend: http://localhost:3001  Frontend: http://localhost:3000
 
-### 2. Configuration
+# Command Center
+cd prior-command-center
+./demo.sh
+# → Backend: http://localhost:3002  Frontend: http://localhost:5173
 
-Copy the example environment file and configure your settings:
-
-```bash
-cp .env.example .env
-```
-
-Edit `.env` with your configuration:
-
-```env
-# Required: Google Maps API Key
-GOOGLE_MAPS_API_KEY=your_api_key_here
-
-# Email notifications
-EMAIL_HOST=smtp.gmail.com
-EMAIL_PORT=587
-EMAIL_USER=your_email@company.com
-EMAIL_PASS=your_app_password
-NOTIFICATION_RECIPIENTS=team@company.com,alerts@company.com
-
-# Optional: Slack notifications
-SLACK_WEBHOOK_URL=https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK
-
-# Monitoring settings
-CHECK_INTERVAL_HOURS=24
-```
-
-### 3. Add Places to Monitor
-
-You can add places in several ways:
-
-**Add individual places:**
-```bash
-npm start add "Joe's Coffee Shop" "NYC Food Guide" "Coffee Shops"
-```
-
-**Import from JSON file:**
-```bash
-npm start import data/example-places.json
-```
-
-**Example JSON format:**
-```json
-[
-  {
-    "name": "NYC Food Guide",
-    "places": [
-      {
-        "name": "Joe's Pizza",
-        "address": "7 Carmine St, New York, NY 10014",
-        "section": "Classic NY Pizza"
-      }
-    ]
-  }
-]
-```
-
-### 4. Start Monitoring
-
-```bash
+# Location Checker (desktop)
+cd locationcheckerv2
 npm start
 ```
 
-## Command Line Usage
+---
 
-```bash
-# Start the monitoring service
-npm start
+## Environment Setup
 
-# Run immediate check
-npm start check
+Each project has its own `.env` file with API keys. Required keys vary by project:
 
-# Add a new place
-npm start add "Restaurant Name" "Guide Name" "Section"
+| Key | Used By |
+|-----|---------|
+| `CONTENTFUL_SPACE_ID` / `CONTENTFUL_CMA_TOKEN` | Command Center, Article Uploader, Location Checker v2 |
+| `ANTHROPIC_API_KEY` | Command Center |
+| `GA_PROPERTY_ID` / `GOOGLE_CLIENT_*` / `GOOGLE_REFRESH_TOKEN` | Command Center |
+| `INSTAGRAM_ACCESS_TOKEN` / `INSTAGRAM_BUSINESS_ACCOUNT_ID` | Command Center |
+| `KLAVIYO_API_KEY` | Command Center |
+| `GOOGLE_MAPS_API_KEY` | Location Checker v1 & v2 |
 
-# Import places from file
-npm start import ./path/to/places.json
+---
 
-# Check system status
-npm start status
+## Shared Patterns
 
-# Generate daily report
-npm start report
-
-# Test specific place
-npm start test <place_id>
-```
-
-## How It Works
-
-### 1. Place Detection
-The system uses Google Maps Places API to:
-- Search for places by name and location
-- Get detailed place information including `business_status`
-- Monitor for status changes: `OPERATIONAL`, `CLOSED_TEMPORARILY`, `CLOSED_PERMANENTLY`
-
-### 2. Status Monitoring
-- Regularly checks all tracked places using batch API calls
-- Detects status changes and maintains history
-- Respects Google Maps API rate limits
-
-### 3. Alert System
-When a place closes:
-- Creates detailed email alerts with place information
-- Sends Slack notifications (if configured)
-- Includes guide context and recommended actions
-- Tracks alert history
-
-### 4. Reporting
-- Daily status reports with statistics
-- Weekly summaries of changes
-- Place status history tracking
-
-## Configuration Options
-
-| Setting | Description | Default |
-|---------|-------------|---------|
-| `CHECK_INTERVAL_HOURS` | How often to check places | 24 |
-| `MAX_RETRIES` | API retry attempts | 3 |
-| `TIMEOUT_MS` | API request timeout | 10000 |
-| `LOG_LEVEL` | Logging verbosity | info |
-
-## Google Maps API Setup
-
-1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Create a new project or select existing one
-3. Enable the Places API
-4. Create credentials (API Key)
-5. Restrict the API key to Places API for security
-6. Add the API key to your `.env` file
-
-**Required API permissions:**
-- Places API (Place Details, Find Place)
-
-## Email Setup
-
-For Gmail:
-1. Enable 2-factor authentication
-2. Generate an App Password
-3. Use the App Password in `EMAIL_PASS`
-
-## Slack Setup
-
-1. Create a Slack app
-2. Add Incoming Webhooks
-3. Copy webhook URL to `SLACK_WEBHOOK_URL`
-
-## File Structure
-
-```
-├── src/
-│   ├── config/           # Configuration management
-│   ├── models/           # Data models (Place)
-│   ├── services/         # Core services
-│   │   ├── googleMaps.js # Google Maps API integration
-│   │   ├── dataManager.js # Data persistence
-│   │   ├── notificationService.js # Email/Slack alerts
-│   │   ├── placeMonitor.js # Main monitoring logic
-│   │   └── scheduler.js  # Cron job management
-│   └── index.js          # Application entry point
-├── data/                 # JSON data storage
-├── logs/                 # Application logs
-└── .env                  # Environment configuration
-```
-
-## Monitoring Best Practices
-
-1. **Start Small**: Begin with a few important places to test the system
-2. **API Quotas**: Monitor your Google Maps API usage and costs
-3. **Check Intervals**: Daily checks are usually sufficient for most use cases
-4. **Error Handling**: The system retries failed requests automatically
-5. **Data Backup**: Regularly backup your `data/` directory
-
-## Troubleshooting
-
-**Common Issues:**
-
-- **API Key Issues**: Ensure Places API is enabled and key is unrestricted
-- **Email Problems**: Check SMTP settings and use App Passwords for Gmail
-- **Place Not Found**: Try different search terms or add address information
-- **Rate Limits**: Reduce check frequency or implement longer delays
-
-**Logs:**
-Check `logs/place-monitor.log` for detailed error information.
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Add tests for new functionality
-4. Submit a pull request
-
-## License
-
-MIT License - see LICENSE file for details.
+- **Backend:** Node.js + Express on all full-stack projects
+- **Frontend:** React + Vite on all web UIs
+- **CMS:** Contentful (articles, people, categories)
+- **Scraping:** Puppeteer and/or Cheerio across multiple projects
+- **Config:** `.env` files with `dotenv` for secrets; never committed to git
