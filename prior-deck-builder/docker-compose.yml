@@ -1,0 +1,105 @@
+name: prior-deck-builder
+
+x-node-service: &node-service
+  image: node:22-bookworm-slim
+  working_dir: /workspace
+  init: true
+  volumes:
+    - .:/workspace
+    - node_modules:/workspace/node_modules
+    - ./storage:/workspace/storage
+  environment:
+    NODE_ENV: development
+    CHOKIDAR_USEPOLLING: "true"
+    WATCHPACK_POLLING: "true"
+    PORT: "3001"
+    MONGODB_URI: mongodb://mongo:27017/prior-deck-builder
+    APP_BASE_URL: http://localhost:3001
+    NEXT_PUBLIC_API_BASE_URL: http://localhost:3001
+    AUTH_MODE: ${AUTH_MODE:-dev}
+    AUTH_AUDIENCE: ${AUTH_AUDIENCE:-}
+    AUTH_ISSUER: ${AUTH_ISSUER:-}
+    AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:-}
+    AUTH_JWKS_URI: ${AUTH_JWKS_URI:-}
+    ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-3-5-sonnet-latest}
+    DOWNLOAD_SIGNING_SECRET: ${DOWNLOAD_SIGNING_SECRET:-replace-me-in-env}
+    STORAGE_MODE: ${STORAGE_MODE:-local}
+    LOCAL_STORAGE_DIR: /workspace/storage
+    TEMPLATE_VERSION: ${TEMPLATE_VERSION:-prior-2026-v1}
+    MODEL_VERSION: ${MODEL_VERSION:-claude-3-5-sonnet-latest}
+    PPTX_TEMPLATE_PATH: ${PPTX_TEMPLATE_PATH:-}
+    WORKER_POLL_INTERVAL_MS: ${WORKER_POLL_INTERVAL_MS:-3000}
+    WORKER_ID: ${WORKER_ID:-docker-worker}
+    DO_SPACES_BUCKET: ${DO_SPACES_BUCKET:-}
+    DO_SPACES_REGION: ${DO_SPACES_REGION:-}
+    DO_SPACES_ENDPOINT: ${DO_SPACES_ENDPOINT:-}
+    DO_SPACES_KEY: ${DO_SPACES_KEY:-}
+    DO_SPACES_SECRET: ${DO_SPACES_SECRET:-}
+
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --eval 'quit(db.adminCommand({ ping: 1 }).ok ? 0 : 1)'"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  deps:
+    <<: *node-service
+    command: sh -lc "npm ci"
+    restart: "no"
+
+  api:
+    <<: *node-service
+    command: sh -lc "npm run dev --workspace @prior/deck-builder-api"
+    ports:
+      - "3001:3001"
+    depends_on:
+      deps:
+        condition: service_completed_successfully
+      mongo:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3001/api/health').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))\""]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  worker:
+    <<: *node-service
+    command: sh -lc "npm run dev --workspace @prior/deck-builder-worker"
+    depends_on:
+      deps:
+        condition: service_completed_successfully
+      mongo:
+        condition: service_healthy
+
+  web:
+    <<: *node-service
+    command: sh -lc "npm run dev --workspace @prior/deck-builder-web"
+    ports:
+      - "3000:3000"
+    depends_on:
+      deps:
+        condition: service_completed_successfully
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))\""]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 15s
+
+volumes:
+  node_modules:
+  mongo_data:

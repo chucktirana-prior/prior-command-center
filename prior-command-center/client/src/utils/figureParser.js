@@ -6,7 +6,7 @@
  *
  * Returns an array of { index, fullMatch, src, alt, caption }.
  */
-const FIGURE_BLOCK_RE = /<figure>\s*<img\b([^>]*)>\s*<figcaption>([\s\S]*?)<\/figcaption>\s*<\/figure>/gi;
+const FIGURE_BLOCK_RE = /<figure\b[^>]*>\s*<img\b([^>]*)\/?>\s*(?:<figcaption\b[^>]*>([\s\S]*?)<\/figcaption>)?\s*<\/figure>/gi;
 const ATTRIBUTE_RE = /([a-zA-Z_:][\w:.-]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|“([^”]*)”|‘([^’]*)’)/g;
 
 function parseAttributes(attributeString) {
@@ -36,7 +36,7 @@ export function extractFigures(markdown) {
       fullMatch: match[0],
       src: attributes.src || '',
       alt: attributes.alt || '',
-      caption: match[2] || '',
+      caption: (match[2] || '').trim(),
     });
     index++;
   }

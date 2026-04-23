@@ -15,6 +15,7 @@ const TOOLTIP_STYLE = {
 
 const PIE_COLORS = ['#000000', '#666666', '#93C47D', '#6AA84F', '#F9CB9C', '#999999', '#38761D', '#FFE599'];
 const TRAFFIC_SOURCE_LIMIT = 6;
+const TRAFFIC_SOURCE_COLLAPSED_LIST_LIMIT = 5;
 const TRAFFIC_SOURCE_GROUPS = [
   {
     key: 'direct',
@@ -358,6 +359,9 @@ const TABLE_COLUMNS = [
   { key: 'page_path', label: 'Page', align: 'left' },
   { key: 'total_views', label: 'Views', align: 'right', format: v => v?.toLocaleString() },
   { key: 'total_sessions', label: 'Sessions', align: 'right', format: v => v?.toLocaleString() },
+  { key: 'landing_page_sessions', label: 'Landing Sessions', align: 'right', format: v => v?.toLocaleString() || '—' },
+  { key: 'engaged_sessions', label: 'Engaged', align: 'right', format: v => v?.toLocaleString() || '—' },
+  { key: 'key_events', label: 'Key Events', align: 'right', format: v => v != null ? Number(v).toLocaleString() : '—' },
   { key: 'avg_duration', label: 'Avg Duration', align: 'right', format: formatDuration },
   { key: 'avg_engagement', label: 'Engagement', align: 'right', format: v => v != null ? (v * 100).toFixed(1) + '%' : '—' },
   { key: 'avg_bounce', label: 'Bounce Rate', align: 'right', format: v => v != null ? (v * 100).toFixed(1) + '%' : '—' },
@@ -397,7 +401,7 @@ export default function GoogleAnalyticsTab({ dateRange, syncStatus }) {
     return <div className="text-prior-muted font-serif text-center py-12">No analytics data for this period</div>;
   }
 
-  const { pages, traffic } = gaData;
+  const { pages, traffic, summary, page_performance: pagePerformance = [] } = gaData;
   const totalRecords = pages.length + traffic.length;
 
   // Aggregate pages by date for time series
@@ -423,17 +427,30 @@ export default function GoogleAnalyticsTab({ dateRange, syncStatus }) {
     : topSources;
   const visibleSourceList = showAllSources
     ? sourceBreakdown
-    : [...topSources, ...groupedTail];
+    : [...topSources, ...groupedTail].slice(0, TRAFFIC_SOURCE_COLLAPSED_LIST_LIMIT);
 
   // Aggregate pages by path for table
   const pageAgg = {};
   for (const p of pages) {
     if (!pageAgg[p.page_path]) {
-      pageAgg[p.page_path] = { page_path: p.page_path, total_views: 0, total_sessions: 0, durations: [], engagements: [], bounces: [] };
+      pageAgg[p.page_path] = {
+        page_path: p.page_path,
+        total_views: 0,
+        total_sessions: 0,
+        landing_page_sessions: 0,
+        engaged_sessions: 0,
+        key_events: 0,
+        durations: [],
+        engagements: [],
+        bounces: [],
+      };
     }
     const agg = pageAgg[p.page_path];
     agg.total_views += p.page_views || 0;
     agg.total_sessions += p.sessions || 0;
+    agg.landing_page_sessions += p.landing_page_sessions || 0;
+    agg.engaged_sessions += p.engaged_sessions || 0;
+    agg.key_events += p.key_events || 0;
     agg.durations.push(p.avg_session_duration || 0);
     agg.engagements.push(p.engagement_rate || 0);
     agg.bounces.push(p.bounce_rate || 0);
@@ -452,6 +469,12 @@ export default function GoogleAnalyticsTab({ dateRange, syncStatus }) {
   const totalViews = pages.reduce((s, p) => s + (p.page_views || 0), 0);
   const totalSessions = pages.reduce((s, p) => s + (p.sessions || 0), 0);
   const avgEngagement = pages.length ? pages.reduce((s, p) => s + (p.engagement_rate || 0), 0) / pages.length : null;
+  const topLandingPage = [...pagePerformance]
+    .sort((a, b) => (b.landing_page_sessions || 0) - (a.landing_page_sessions || 0))[0] || null;
+  const totalLandingSessions = pages.reduce((s, p) => s + (p.landing_page_sessions || 0), 0);
+  const totalEngagedSessions = summary?.engaged_sessions ?? pages.reduce((s, p) => s + (p.engaged_sessions || 0), 0);
+  const totalNewUsers = summary?.new_users ?? 0;
+  const totalKeyEvents = summary?.total_key_events ?? pages.reduce((s, p) => s + (p.key_events || 0), 0);
   const exportText = buildTrafficSourceExportText({
     sourceBreakdown,
     topSources,
@@ -470,10 +493,40 @@ export default function GoogleAnalyticsTab({ dateRange, syncStatus }) {
       <DataFreshnessBanner source="Google Analytics" status={syncStatus} dataCount={totalRecords} />
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-4">
         <KpiCard label="Total Page Views" value={fmt(totalViews)} />
         <KpiCard label="Total Sessions" value={fmt(totalSessions)} />
         <KpiCard label="Avg Engagement Rate" value={avgEngagement != null ? (avgEngagement * 100).toFixed(1) + '%' : '—'} />
+        <KpiCard label="Engaged Sessions" value={fmt(totalEngagedSessions)} />
+        <KpiCard label="New Users" value={fmt(totalNewUsers)} />
+        <KpiCard label="Key Events" value={fmt(totalKeyEvents)} />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="rounded-xl border border-prior-border bg-white p-5">
+          <div className="text-[11px] uppercase tracking-[0.2em] text-prior-muted font-serif">Landing Page Snapshot</div>
+          <div className="mt-3 text-sm font-serif text-prior-body">
+            Top landing page: <span className="text-prior-black">{topLandingPage?.path || '—'}</span>
+          </div>
+          <div className="mt-2 text-sm font-serif text-prior-body">
+            Landing sessions in range: <span className="text-prior-black">{fmt(totalLandingSessions)}</span>
+          </div>
+          <div className="mt-2 text-sm font-serif text-prior-body">
+            Top landing-page sessions: <span className="text-prior-black">{fmt(topLandingPage?.landing_page_sessions)}</span>
+          </div>
+        </div>
+        <div className="rounded-xl border border-prior-border bg-white p-5">
+          <div className="text-[11px] uppercase tracking-[0.2em] text-prior-muted font-serif">Traffic Quality Snapshot</div>
+          <div className="mt-3 text-sm font-serif text-prior-body">
+            Best quality source: <span className="text-prior-black">{summary?.top_traffic_source_by_quality?.source || '—'}</span>
+          </div>
+          <div className="mt-2 text-sm font-serif text-prior-body">
+            Engagement rate: <span className="text-prior-black">{summary?.top_traffic_source_by_quality?.engagement_rate != null ? `${(summary.top_traffic_source_by_quality.engagement_rate * 100).toFixed(1)}%` : '—'}</span>
+          </div>
+          <div className="mt-2 text-sm font-serif text-prior-body">
+            Conversion proxy: <span className="text-prior-black">{summary?.top_traffic_source_by_quality?.conversion_rate != null ? `${(summary.top_traffic_source_by_quality.conversion_rate * 100).toFixed(1)}%` : '—'}</span>
+          </div>
+        </div>
       </div>
 
       {/* Charts */}
@@ -552,14 +605,20 @@ export default function GoogleAnalyticsTab({ dateRange, syncStatus }) {
                 </div>
               ))}
 
-              {remainingSources.length > 0 && (
+              {!showAllSources && sourceBreakdown.length > TRAFFIC_SOURCE_COLLAPSED_LIST_LIMIT && (
+                <div className="text-[11px] font-serif text-prior-muted">
+                  {sourceBreakdown.length - TRAFFIC_SOURCE_COLLAPSED_LIST_LIMIT} more sources hidden until expanded.
+                </div>
+              )}
+
+              {sourceBreakdown.length > TRAFFIC_SOURCE_COLLAPSED_LIST_LIMIT && (
                 <button
                   type="button"
                   onClick={() => setShowAllSources((prev) => !prev)}
                   className="pt-1 text-xs font-serif text-prior-body underline underline-offset-4 hover:text-prior-black"
                 >
                   {showAllSources
-                    ? 'Show fewer traffic sources'
+                    ? 'Collapse traffic sources'
                     : `Show all ${sourceBreakdown.length} traffic sources`}
                 </button>
               )}

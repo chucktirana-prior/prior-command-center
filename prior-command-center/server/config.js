@@ -1,4 +1,5 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
+dotenv.config({ override: true });
 
 const config = {
   port: process.env.PORT || 3002,
@@ -12,6 +13,9 @@ const config = {
     articleTypeId: process.env.CONTENTFUL_ARTICLE_TYPE_ID || 'article',
     personTypeId: process.env.CONTENTFUL_PERSON_TYPE_ID || 'person',
     categoryTypeId: process.env.CONTENTFUL_CATEGORY_TYPE_ID || 'category',
+    guidePostTypeId: process.env.CONTENTFUL_GUIDE_POST_TYPE_ID || 'guidePost',
+    guideTypeId: process.env.CONTENTFUL_GUIDE_TYPE_ID || 'guide',
+    guideSubCategoryTypeId: process.env.CONTENTFUL_GUIDE_SUB_CATEGORY_TYPE_ID || 'guideType',
   },
 
   // Klaviyo

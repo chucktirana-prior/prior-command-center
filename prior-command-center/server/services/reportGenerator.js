@@ -82,6 +82,15 @@ function formatPageLabel(pathValue) {
   return pathValue;
 }
 
+function formatDuration(seconds) {
+  if (seconds == null || Number.isNaN(seconds)) return '--';
+  const wholeSeconds = Math.max(0, Math.round(seconds));
+  const minutes = Math.floor(wholeSeconds / 60);
+  const remainder = wholeSeconds % 60;
+  if (minutes === 0) return `${remainder}s`;
+  return `${minutes}m ${remainder}s`;
+}
+
 function registerFonts(doc) {
   try {
     doc.registerFont('Prior', path.join(FONTS_DIR, 'LibreBaskerville-Regular.ttf'));
@@ -194,6 +203,22 @@ function drawBulletList(doc, items, bulletColor, pageCounter) {
   }
 }
 
+function drawInlineBullets(doc, items, pageCounter) {
+  const bulletItems = (items || []).filter(Boolean);
+  if (!bulletItems.length) {
+    return;
+  }
+
+  doc.font('Prior').fontSize(9).fillColor(COLORS.body);
+  for (const item of bulletItems) {
+    ensureSpace(doc, 22, pageCounter);
+    const y = doc.y;
+    doc.circle(MARGIN + 4, y + 5, 2).fill(COLORS.black);
+    doc.fillColor(COLORS.body).text(item, MARGIN + 14, y, { width: CONTENT_WIDTH - 14 });
+    doc.moveDown(0.35);
+  }
+}
+
 function drawCallout(doc, label, lines, pageCounter) {
   doc.font('Prior').fontSize(9);
   const textHeights = lines.map((line) =>
@@ -218,6 +243,15 @@ function drawCallout(doc, label, lines, pageCounter) {
   }
 
   doc.y = boxY + boxH + 12;
+}
+
+function drawMetricGlossary(doc, title, items, pageCounter) {
+  if (!items?.length) return;
+  ensureSpace(doc, 80, pageCounter);
+  doc.font('Prior-Bold').fontSize(9).fillColor(COLORS.black).text(title, MARGIN);
+  doc.moveDown(0.3);
+  drawInlineBullets(doc, items, pageCounter);
+  doc.moveDown(0.4);
 }
 
 function drawCardGrid(doc, cards, columns, pageCounter) {
@@ -340,11 +374,12 @@ function drawExecutiveSummary(doc, metrics, previousMetrics, insight, pageCounte
 
   // KPI metrics row
   const kpis = [
-    { label: 'Total Reach', value: fmt(metrics.instagram.total_reach) },
-    { label: 'Engagement Rate', value: pct(metrics.instagram.avg_engagement_rate) },
-    { label: 'Email Open Rate', value: pct(metrics.klaviyo.avg_open_rate) },
-    { label: 'Page Views', value: fmt(metrics.googleAnalytics.total_page_views) },
-    { label: 'Followers', value: fmt(metrics.instagram.current_followers) },
+    { label: 'Sessions', value: fmt(metrics.googleAnalytics.total_sessions) },
+    { label: 'Engaged Sessions', value: fmt(metrics.googleAnalytics.engaged_sessions) },
+    { label: 'Email CTOR', value: pct(metrics.klaviyo.avg_ctor) },
+    { label: 'New Users', value: pct(metrics.googleAnalytics.new_users_pct) },
+    { label: 'Returning Users', value: pct(metrics.googleAnalytics.returning_users_pct) },
+    { label: 'Key Events', value: fmt(metrics.googleAnalytics.total_key_events) },
   ];
 
   const kpiWidth = CONTENT_WIDTH / 3;
@@ -356,19 +391,19 @@ function drawExecutiveSummary(doc, metrics, previousMetrics, insight, pageCounte
   }
   doc.y = kpiY + 50;
 
-  // Second row of 2
-  for (let i = 3; i < 5; i++) {
+  // Second row of 3
+  for (let i = 3; i < 6; i++) {
     drawMetricBlock(doc, MARGIN + (i - 3) * kpiWidth, doc.y, kpis[i].label, kpis[i].value, kpiWidth);
   }
   doc.y += 58;
 
   const summaryNotes = [];
   if (metrics.klaviyo.best_campaign?.name) {
-    summaryNotes.push(`Top email send: ${metrics.klaviyo.best_campaign.name} at ${pct(metrics.klaviyo.best_campaign.open_rate)} open rate.`);
+    summaryNotes.push(`Top email send was ${metrics.klaviyo.best_campaign.name}, with a ${pct(metrics.klaviyo.best_campaign.open_rate)} open rate.`);
   }
   if (metrics.googleAnalytics.top_pages?.[0]) {
     const leadPage = metrics.googleAnalytics.top_feature_page || metrics.googleAnalytics.top_pages[0];
-    summaryNotes.push(`Most-read page: ${formatPageLabel(leadPage.path)} with ${fmt(leadPage.views)} views.`);
+    summaryNotes.push(`Most-read page was ${formatPageLabel(leadPage.path)} with ${fmt(leadPage.views)} views.`);
   }
   if (metrics.instagram.best_post?.caption) {
     summaryNotes.push(`Top social post reached ${fmt(metrics.instagram.best_post.reach)} readers.`);
@@ -380,11 +415,15 @@ function drawExecutiveSummary(doc, metrics, previousMetrics, insight, pageCounte
   drawCardGrid(doc, [
     {
       label: 'At a Glance',
-      lines: summaryNotes.length ? summaryNotes.slice(0, 2) : ['No summary notes available for this period.'],
+      lines: summaryNotes.length ? summaryNotes.slice(0, 2).map((line) => `• ${line}`) : ['• No summary notes available for this period.'],
     },
     {
       label: 'Top Insight',
-      lines: insight?.highlights?.length ? [insight.highlights[0]] : ['Generate a fresh analysis to add AI guidance here.'],
+      lines: insight?.highlights?.length ? [`• ${insight.highlights[0]}`] : ['• Generate a fresh analysis to add AI guidance here.'],
+    },
+    {
+      label: 'Next Best Action',
+      lines: insight?.recommendations?.length ? [`• ${insight.recommendations[0]}`] : ['• No action recommendation available for this period.'],
     },
   ], 2, pageCounter);
 
@@ -400,9 +439,9 @@ function drawExecutiveSummary(doc, metrics, previousMetrics, insight, pageCounte
     {
       label: 'Web Snapshot',
       lines: [
-        `Page views: ${fmt(metrics.googleAnalytics.total_page_views)}`,
-        `Top page: ${formatPageLabel(metrics.googleAnalytics.top_feature_page?.path || metrics.googleAnalytics.top_pages?.[0]?.path)}`,
-        `Change: ${signedPct(percentChange(metrics.googleAnalytics.total_page_views, previousMetrics?.googleAnalytics?.total_page_views))} vs prior period`,
+        `Sessions: ${fmt(metrics.googleAnalytics.total_sessions)} (${signedPct(percentChange(metrics.googleAnalytics.total_sessions, previousMetrics?.googleAnalytics?.total_sessions))} vs prior period)`,
+        `Top landing page: ${formatPageLabel(metrics.googleAnalytics.top_feature_page?.path || metrics.googleAnalytics.top_pages?.[0]?.path)}`,
+        `New / returning mix: ${pct(metrics.googleAnalytics.new_users_pct)} / ${pct(metrics.googleAnalytics.returning_users_pct)}`,
       ],
     },
     {
@@ -413,8 +452,16 @@ function drawExecutiveSummary(doc, metrics, previousMetrics, insight, pageCounte
         `Change: ${signedPct(percentChange(metrics.instagram.current_followers, previousMetrics?.instagram?.current_followers))} vs prior period`,
       ],
     },
+    {
+      label: 'Channel Quality',
+      lines: [
+        `Best source: ${metrics.googleAnalytics.top_traffic_source_by_quality?.source || '--'}`,
+        `Quality engagement: ${pct(metrics.googleAnalytics.top_traffic_source_by_quality?.engagement_rate)}`,
+        `Top content theme: ${metrics.googleAnalytics.content_rollup?.[0]?.content_theme || '--'}`,
+      ],
+    },
   ];
-  drawCardGrid(doc, platformCards, 3, pageCounter);
+  drawCardGrid(doc, platformCards, 2, pageCounter);
 }
 
 function drawKlaviyoSection(doc, klaviyo, previousKlaviyo, insight, pageCounter) {
@@ -429,25 +476,32 @@ function drawKlaviyoSection(doc, klaviyo, previousKlaviyo, insight, pageCounter)
   }
 
   const stats = [
-    ['Campaigns Sent', `${String(klaviyo.campaigns_count)}\n${signedPct(percentChange(klaviyo.campaigns_count, previousKlaviyo?.campaigns_count))} vs prior period`],
     ['Avg Open Rate', `${pct(klaviyo.avg_open_rate)}\n${signedPoints(pointChange(klaviyo.avg_open_rate, previousKlaviyo?.avg_open_rate))} vs prior period`],
     ['Avg Click Rate', `${pct(klaviyo.avg_click_rate)}\n${signedPoints(pointChange(klaviyo.avg_click_rate, previousKlaviyo?.avg_click_rate))} vs prior period`],
+    ['Avg CTOR', `${pct(klaviyo.avg_ctor)}\n${signedPoints(pointChange(klaviyo.avg_ctor, previousKlaviyo?.avg_ctor))} vs prior period`],
     ['Total Recipients', `${fmt(klaviyo.total_recipients)}\n${signedPct(percentChange(klaviyo.total_recipients, previousKlaviyo?.total_recipients))} vs prior period`],
   ];
   drawStatGrid(doc, stats, 2, pageCounter);
+
+  drawMetricGlossary(doc, 'What These Metrics Mean', [
+    'Open Rate: the share of delivered emails that were opened.',
+    'Click Rate: the share of delivered emails that earned at least one click.',
+    'CTOR: click-to-open rate, which shows how many openers clicked through.',
+    'Recipients: the number of subscribers who received the campaign.',
+  ], pageCounter);
 
   // Best campaign callout
   if (klaviyo.best_campaign) {
     const bc = klaviyo.best_campaign;
     drawCallout(doc, 'Top Performing Campaign', [
       bc.name,
-      `Open Rate: ${pct(bc.open_rate)}  •  Click Rate: ${pct(bc.click_rate)}`,
+      `Open Rate: ${pct(bc.open_rate)}  •  Click Rate: ${pct(bc.click_rate)}  •  Type: ${bc.campaign_type || '--'}`,
     ], pageCounter);
   }
 
   const emailNotes = getSectionInsightNotes(insight, 'klaviyo');
   if (emailNotes.length) {
-    drawCallout(doc, 'Editorial Notes', emailNotes, pageCounter);
+    drawCallout(doc, 'Editorial Notes', emailNotes.map((note) => `• ${note}`), pageCounter);
   }
 
   if (klaviyo.recent_campaigns?.length) {
@@ -467,6 +521,41 @@ function drawKlaviyoSection(doc, klaviyo, previousKlaviyo, insight, pageCounter)
       pageCounter,
     );
   }
+
+  if (klaviyo.campaign_type_rollup?.length) {
+    ensureSpace(doc, 120, pageCounter);
+    doc.font('Prior-Bold').fontSize(9).fillColor(COLORS.black).text('Campaign Type Performance', MARGIN);
+    doc.moveDown(0.4);
+    drawTable(doc,
+      ['Type', 'Campaigns', 'Recipients', 'Open', 'Click'],
+      klaviyo.campaign_type_rollup.slice(0, 5).map((group) => [
+        group.campaign_type,
+        fmt(group.campaigns),
+        fmt(group.recipients),
+        pct(group.avg_open_rate),
+        pct(group.avg_click_rate),
+      ]),
+      [CONTENT_WIDTH * 0.28, CONTENT_WIDTH * 0.14, CONTENT_WIDTH * 0.2, CONTENT_WIDTH * 0.19, CONTENT_WIDTH * 0.19],
+      pageCounter,
+    );
+  }
+
+  if (klaviyo.send_day_rollup?.length) {
+    ensureSpace(doc, 100, pageCounter);
+    doc.font('Prior-Bold').fontSize(9).fillColor(COLORS.black).text('Send Day Pattern', MARGIN);
+    doc.moveDown(0.4);
+    drawTable(doc,
+      ['Day', 'Campaigns', 'Avg Open', 'Avg Click'],
+      klaviyo.send_day_rollup.map((row) => [
+        row.day,
+        fmt(row.campaigns),
+        pct(row.avg_open_rate),
+        pct(row.avg_click_rate),
+      ]),
+      [CONTENT_WIDTH * 0.28, CONTENT_WIDTH * 0.2, CONTENT_WIDTH * 0.26, CONTENT_WIDTH * 0.26],
+      pageCounter,
+    );
+  }
 }
 
 function drawGASection(doc, ga, previousGa, insight, pageCounter) {
@@ -476,28 +565,76 @@ function drawGASection(doc, ga, previousGa, insight, pageCounter) {
   const stats = [
     ['Total Page Views', `${fmt(ga.total_page_views)}\n${signedPct(percentChange(ga.total_page_views, previousGa?.total_page_views))} vs prior period`],
     ['Total Sessions', `${fmt(ga.total_sessions)}\n${signedPct(percentChange(ga.total_sessions, previousGa?.total_sessions))} vs prior period`],
-    ['Avg Engagement Rate', `${pct(ga.avg_engagement_rate)}\n${signedPoints(pointChange(ga.avg_engagement_rate, previousGa?.avg_engagement_rate))} vs prior period`],
-    ['Avg Bounce Rate', `${pct(ga.avg_bounce_rate)}\n${signedPoints(pointChange(ga.avg_bounce_rate, previousGa?.avg_bounce_rate))} vs prior period`],
+    ['Engaged Sessions', `${fmt(ga.engaged_sessions)}\n${signedPct(percentChange(ga.engaged_sessions, previousGa?.engaged_sessions))} vs prior period`],
+    ['Avg Engagement Rate', `${pct(ga.engagement_rate)}\n${signedPoints(pointChange(ga.engagement_rate, previousGa?.engagement_rate))} vs prior period`],
+    ['New Users', `${fmt(ga.new_users)}\n${signedPct(percentChange(ga.new_users, previousGa?.new_users))} vs prior period`],
+    ['Key Events', `${fmt(ga.total_key_events)}\n${signedPct(percentChange(ga.total_key_events, previousGa?.total_key_events))} vs prior period`],
   ];
-  drawStatGrid(doc, stats, 2, pageCounter);
+  drawStatGrid(doc, stats, 3, pageCounter);
+
+  drawMetricGlossary(doc, 'What These Metrics Mean', [
+    'Page Views: the total number of times pages were viewed.',
+    'Sessions: visits to the site, including multiple page views in one visit.',
+    'Engaged Sessions: visits where readers stayed engaged long enough to signal meaningful attention.',
+    'New Users: first-time readers in the selected period.',
+    'Key Events: important tracked actions on site, used here as a conversion proxy.',
+  ], pageCounter);
 
   const topPage = ga.top_pages?.[0];
   const leadPage = ga.top_feature_page || topPage;
-  const topSource = ga.traffic_sources?.[0];
+  const topSource = ga.top_traffic_source_by_quality || ga.traffic_sources?.[0];
   if (topPage || topSource) {
     const lines = [];
     if (leadPage) {
-      lines.push(`Top page: ${formatPageLabel(leadPage.path)} with ${fmt(leadPage.views)} views.`);
+      lines.push(`Top landing page: ${formatPageLabel(leadPage.path)} with ${fmt(leadPage.landing_page_sessions || leadPage.views)} landing sessions.`);
     }
     if (topSource) {
-      lines.push(`Top traffic source: ${topSource.source} with ${fmt(topSource.sessions)} sessions.`);
+      lines.push(`Best quality source: ${topSource.source} with ${fmt(topSource.sessions)} sessions and ${pct(topSource.engagement_rate)} engagement.`);
     }
     drawCallout(doc, 'Reader Snapshot', lines, pageCounter);
   }
 
+  drawCallout(doc, 'Audience Snapshot', [
+    `New users: ${fmt(ga.new_users)} (${pct(ga.new_users_pct)})`,
+    `Returning users: ${fmt(ga.returning_users)} (${pct(ga.returning_users_pct)})`,
+    `Avg engagement time per session: ${formatDuration(ga.avg_engagement_time_per_session || 0)}`,
+  ], pageCounter);
+
+  if (ga.conversion_definition?.note || ga.top_converting_page || ga.top_converting_source) {
+    const lines = [];
+    if (ga.conversion_definition?.note) {
+      lines.push(`Conversion proxy: ${ga.conversion_definition.label}. ${ga.conversion_definition.note}.`);
+    }
+    if (ga.top_converting_page?.path) {
+      lines.push(`Top converting page: ${formatPageLabel(ga.top_converting_page.path)} at ${pct(ga.top_converting_page.conversion_rate)} conversion rate.`);
+    }
+    if (ga.top_converting_source?.source) {
+      lines.push(`Top converting source: ${ga.top_converting_source.source} at ${pct(ga.top_converting_source.conversion_rate)} conversion rate.`);
+    }
+    drawCallout(doc, 'Conversion Snapshot', lines, pageCounter);
+  }
+
   const gaNotes = getSectionInsightNotes(insight, 'ga');
   if (gaNotes.length) {
-    drawCallout(doc, 'Editorial Notes', gaNotes, pageCounter);
+    drawCallout(doc, 'Editorial Notes', gaNotes.map((note) => `• ${note}`), pageCounter);
+  }
+
+  if (ga.channel_rollup?.length) {
+    ensureSpace(doc, 120, pageCounter);
+    doc.font('Prior-Bold').fontSize(9).fillColor(COLORS.black).text('Channel Performance', MARGIN);
+    doc.moveDown(0.4);
+    drawTable(doc,
+      ['Channel', 'Sessions', 'Engagement', 'Conv. Proxy', 'New Users'],
+      ga.channel_rollup.slice(0, 6).map((channel) => [
+        channel.channel_group,
+        fmt(channel.sessions),
+        pct(channel.engagement_rate),
+        pct(channel.conversion_rate),
+        fmt(channel.new_users),
+      ]),
+      [CONTENT_WIDTH * 0.28, CONTENT_WIDTH * 0.18, CONTENT_WIDTH * 0.18, CONTENT_WIDTH * 0.18, CONTENT_WIDTH * 0.18],
+      pageCounter,
+    );
   }
 
   // Top pages table
@@ -506,23 +643,42 @@ function drawGASection(doc, ga, previousGa, insight, pageCounter) {
     doc.font('Prior-Bold').fontSize(9).fillColor(COLORS.black).text('Top Pages', MARGIN);
     doc.moveDown(0.4);
     drawTable(doc,
-      ['Page', 'Views'],
-      ga.top_pages.map(p => [formatPageLabel(p.path), fmt(p.views)]),
-      [CONTENT_WIDTH - 80, 80],
+      ['Page', 'Views', 'Landing', 'Engaged', 'Key Events'],
+      ga.top_pages.map(p => [formatPageLabel(p.path), fmt(p.views), fmt(p.landing_page_sessions), fmt(p.engaged_sessions), fmt(p.key_events)]),
+      [CONTENT_WIDTH * 0.48, CONTENT_WIDTH * 0.13, CONTENT_WIDTH * 0.13, CONTENT_WIDTH * 0.13, CONTENT_WIDTH * 0.13],
       pageCounter,
     );
   }
 
-  // Traffic sources table
-  if (ga.traffic_sources?.length) {
+  if (ga.content_rollup?.length) {
     doc.moveDown(0.5);
     ensureSpace(doc, 100, pageCounter);
-    doc.font('Prior-Bold').fontSize(9).fillColor(COLORS.black).text('Traffic Sources', MARGIN);
+    doc.font('Prior-Bold').fontSize(9).fillColor(COLORS.black).text('Content Intelligence', MARGIN);
     doc.moveDown(0.4);
     drawTable(doc,
-      ['Source', 'Sessions'],
-      ga.traffic_sources.map(s => [s.source, fmt(s.sessions)]),
-      [CONTENT_WIDTH - 80, 80],
+      ['Theme', 'Pages', 'Views', 'Sessions', 'Engagement'],
+      ga.content_rollup.slice(0, 6).map((row) => [
+        row.content_theme,
+        fmt(row.pages),
+        fmt(row.views),
+        fmt(row.sessions),
+        pct(row.engagement_rate),
+      ]),
+      [CONTENT_WIDTH * 0.28, CONTENT_WIDTH * 0.14, CONTENT_WIDTH * 0.19, CONTENT_WIDTH * 0.19, CONTENT_WIDTH * 0.2],
+      pageCounter,
+    );
+  }
+
+  // Traffic source quality table
+  if (ga.source_quality?.length) {
+    doc.moveDown(0.5);
+    ensureSpace(doc, 100, pageCounter);
+    doc.font('Prior-Bold').fontSize(9).fillColor(COLORS.black).text('Traffic Source Quality', MARGIN);
+    doc.moveDown(0.4);
+    drawTable(doc,
+      ['Source', 'Sessions', 'Engagement', 'New Users', 'Key Events'],
+      ga.source_quality.slice(0, 6).map(s => [s.source, fmt(s.sessions), pct(s.engagement_rate), fmt(s.new_users), fmt(s.key_events)]),
+      [CONTENT_WIDTH * 0.34, CONTENT_WIDTH * 0.16, CONTENT_WIDTH * 0.16, CONTENT_WIDTH * 0.17, CONTENT_WIDTH * 0.17],
       pageCounter,
     );
   }
@@ -623,6 +779,66 @@ function drawInsightsSection(doc, insight, pageCounter) {
   }
 }
 
+function buildRecommendedActions(metrics, insight) {
+  const actions = [];
+
+  if (metrics.googleAnalytics.top_converting_page?.path) {
+    actions.push({
+      label: 'Double down on',
+      text: `${formatPageLabel(metrics.googleAnalytics.top_converting_page.path)}. It leads the current conversion proxy with ${fmt(metrics.googleAnalytics.top_converting_page.key_events)} key events.`,
+    });
+  } else if (insight?.highlights?.[0]) {
+    actions.push({
+      label: 'Double down on',
+      text: insight.highlights[0],
+    });
+  }
+
+  if (insight?.concerns?.[0]) {
+    actions.push({
+      label: 'Fix',
+      text: insight.concerns[0],
+    });
+  } else if (metrics.googleAnalytics.top_traffic_source_by_quality?.source) {
+    actions.push({
+      label: 'Fix',
+      text: `Raise weaker channels toward the quality benchmark currently set by ${metrics.googleAnalytics.top_traffic_source_by_quality.source}.`,
+    });
+  }
+
+  if (insight?.recommendations?.[0]) {
+    actions.push({
+      label: 'Test',
+      text: insight.recommendations[0],
+    });
+  } else if (metrics.klaviyo.best_campaign?.campaign_type) {
+    actions.push({
+      label: 'Test',
+      text: `Test more ${metrics.klaviyo.best_campaign.campaign_type} framing in newsletters and compare it against evergreen editorial sends.`,
+    });
+  }
+
+  return actions.slice(0, 3);
+}
+
+function drawRecommendedActionsSection(doc, metrics, insight, pageCounter) {
+  ensureSpace(doc, 180, pageCounter);
+  drawSectionHeader(doc, 'Recommended Actions For Next Period');
+
+  const actions = buildRecommendedActions(metrics, insight);
+  if (!actions.length) {
+    doc.font('Prior-Italic').fontSize(10).fillColor(COLORS.muted)
+      .text('No action recommendations are available for this period.', MARGIN);
+    doc.moveDown(1);
+    return;
+  }
+
+  drawCardGrid(doc, actions.map((action) => ({
+    label: action.label,
+    lines: [`• ${action.text}`],
+  })), 3, pageCounter);
+}
+
 // --- Main Export ---
 
 export function generateReport({ start, end, sections = ['klaviyo', 'ga', 'instagram'], includeInsights = true }) {
@@ -662,6 +878,12 @@ export function generateReport({ start, end, sections = ['klaviyo', 'ga', 'insta
     doc.addPage();
     pageCounter.count++;
     drawInstagramSection(doc, metrics.instagram, previousMetrics.instagram, insight, pageCounter);
+  }
+
+  if (includeInsights) {
+    doc.addPage();
+    pageCounter.count++;
+    drawRecommendedActionsSection(doc, metrics, insight, pageCounter);
   }
 
   // Stamp footers on all pages except cover

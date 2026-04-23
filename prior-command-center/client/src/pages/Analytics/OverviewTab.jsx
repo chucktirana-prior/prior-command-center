@@ -159,6 +159,8 @@ export default function OverviewTab({ dateRange, syncStatus, onNavigateToInsight
   const openRateChange = getPointChange(overview.klaviyo.avg_open_rate, previous.klaviyo?.avg_open_rate);
   const clickRateChange = getPointChange(overview.klaviyo.avg_click_rate, previous.klaviyo?.avg_click_rate);
   const pageViewsChange = getPercentChange(overview.google_analytics.total_page_views, previous.google_analytics?.total_page_views);
+  const sessionsChange = getPercentChange(overview.google_analytics.total_sessions, previous.google_analytics?.total_sessions);
+  const engagedSessionsChange = getPercentChange(overview.google_analytics.engaged_sessions, previous.google_analytics?.engaged_sessions);
   const followersChange = getPercentChange(overview.instagram.followers, previous.instagram?.followers);
 
   return (
@@ -188,7 +190,7 @@ export default function OverviewTab({ dateRange, syncStatus, onNavigateToInsight
       )}
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-4">
         <KpiCard
           label="Newsletter Reach"
           value={fmt(overview.klaviyo.total_recipients)}
@@ -218,12 +220,51 @@ export default function OverviewTab({ dateRange, syncStatus, onNavigateToInsight
           trendTone={getTrendTone(pageViewsChange)}
         />
         <KpiCard
+          label="Engaged Sessions"
+          value={fmt(overview.google_analytics.engaged_sessions)}
+          subtitle={`${pct(overview.google_analytics.engagement_rate)} engagement rate`}
+          trendText={buildTrendText(comparisonLabel, formatSignedPercent(engagedSessionsChange))}
+          trendTone={getTrendTone(engagedSessionsChange)}
+        />
+        <KpiCard
           label="Followers"
           value={fmt(overview.instagram.followers)}
           subtitle="Instagram"
           trendText={buildTrendText(comparisonLabel, formatSignedPercent(followersChange))}
           trendTone={getTrendTone(followersChange)}
         />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="rounded-xl border border-prior-border bg-white px-4 py-4">
+          <div className="text-[11px] uppercase tracking-[0.2em] text-prior-muted font-serif">Top Landing Page</div>
+          <div className="mt-2 text-sm font-serif text-prior-black">
+            {overview.google_analytics.top_feature_page?.path || '—'}
+          </div>
+          <div className="mt-1 text-xs font-serif text-prior-muted">
+            {fmt(overview.google_analytics.top_feature_page?.landing_page_sessions)} landing sessions
+          </div>
+        </div>
+        <div className="rounded-xl border border-prior-border bg-white px-4 py-4">
+          <div className="text-[11px] uppercase tracking-[0.2em] text-prior-muted font-serif">Top Traffic Source</div>
+          <div className="mt-2 text-sm font-serif text-prior-black">
+            {overview.google_analytics.top_traffic_source_by_quality?.source || '—'}
+          </div>
+          <div className="mt-1 text-xs font-serif text-prior-muted">
+            {overview.google_analytics.top_traffic_source_by_quality?.engagement_rate != null
+              ? `${(overview.google_analytics.top_traffic_source_by_quality.engagement_rate * 100).toFixed(1)}% engagement`
+              : 'Quality metrics unavailable'}
+          </div>
+        </div>
+        <div className="rounded-xl border border-prior-border bg-white px-4 py-4">
+          <div className="text-[11px] uppercase tracking-[0.2em] text-prior-muted font-serif">Audience Mix</div>
+          <div className="mt-2 text-sm font-serif text-prior-black">
+            {pct(overview.google_analytics.new_users_pct)} new / {pct(overview.google_analytics.returning_users_pct)} returning
+          </div>
+          <div className="mt-1 text-xs font-serif text-prior-muted">
+            {buildTrendText(comparisonLabel, formatSignedPercent(sessionsChange)) || 'No comparison yet'}
+          </div>
+        </div>
       </div>
 
       {/* Intelligence Summary */}

@@ -3,6 +3,7 @@ import {
   searchAuthors,
   listCategories,
   createDraftArticle,
+  searchArticlesBySlugs,
 } from '../../services/uploader/contentful.js';
 
 const router = express.Router();
@@ -25,6 +26,18 @@ router.get('/categories', async (req, res) => {
     res.json(categories);
   } catch (err) {
     console.error('Categories error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/related-articles', async (req, res) => {
+  try {
+    const slugs = [].concat(req.query.slug || []).filter(Boolean);
+    if (!slugs.length) return res.json({ articles: [] });
+    const articles = await searchArticlesBySlugs(slugs);
+    res.json({ articles });
+  } catch (err) {
+    console.error('Related articles search error:', err);
     res.status(500).json({ error: err.message });
   }
 });

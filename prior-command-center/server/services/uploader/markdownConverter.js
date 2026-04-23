@@ -212,4 +212,167 @@ function normalizeFigureBlockWhitespace(markdown) {
   );
 }
 
-export { convertToMarkdown };
+const METADATA_LABEL_ALIASES = {
+  'email intro text': 'emailSl',
+  'email intro': 'emailSl',
+  'email subject line': 'emailSl',
+  'email preview text': 'emailPt',
+  'email preheader': 'emailPt',
+  'email preheader text': 'emailPt',
+  'social copy': 'social',
+  'social text': 'social',
+  'social caption': 'social',
+  'social post': 'social',
+  'keywords': 'keywords',
+  'slug': 'slug',
+  'hero caption': 'heroCaption',
+  'keep reading': 'keepReading',
+  'article body': 'articleBody',
+  'article copy': 'articleBody',
+  'body': 'articleBody',
+  'category': 'category',
+  'location': 'location',
+};
+
+const METADATA_LABEL_PATTERN = Object.keys(METADATA_LABEL_ALIASES)
+  .sort((a, b) => b.length - a.length)
+  .map((label) => label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+  .join('|');
+
+function canonicalMetadataKey(label) {
+  const normalized = String(label || '').trim().toLowerCase();
+  return METADATA_LABEL_ALIASES[normalized] || null;
+}
+
+function extractMetadataSegments(text) {
+  const source = String(text || '').trim();
+  if (!source) return [];
+
+  const regex = new RegExp(`(^|\\s)(${METADATA_LABEL_PATTERN}):\\s*`, 'gi');
+  const matches = [...source.matchAll(regex)];
+  if (!matches.length) return [];
+
+  const segments = [];
+  for (let i = 0; i < matches.length; i++) {
+    const key = canonicalMetadataKey(matches[i][2]);
+    if (!key) continue;
+    const valueStart = matches[i].index + matches[i][0].length;
+    const valueEnd = i + 1 < matches.length ? matches[i + 1].index : source.length;
+    const value = source.slice(valueStart, valueEnd).trim();
+    segments.push({ key, value });
+  }
+
+  return segments;
+}
+
+function normalizeKeywords(value) {
+  return String(value || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function normalizeParagraphLabel(text) {
+  return String(text || '')
+    .replace(/^#{1,6}\s+/, '')
+    .replace(/^\*+/, '')
+    .replace(/\*+$/, '')
+    .trim()
+    .toLowerCase();
+}
+
+function extractKeepReadingStart(paragraph) {
+  const raw = String(paragraph || '').trim();
+  const normalized = normalizeParagraphLabel(raw);
+
+  if (normalized === 'keep reading' || normalized === 'keep reading:') {
+    return { type: 'boundary', body: '' };
+  }
+
+  const inlineMatch = raw.match(/^(?:#{1,6}\s+)?(?:\*{1,3})?\s*keep reading\s*:?\s*(?:\*{1,3})?\s*(.*)$/i);
+  if (inlineMatch) {
+    return { type: 'boundary', body: inlineMatch[1].trim() };
+  }
+
+  return null;
+}
+
+function scrubLeadingMetadata(markdown, existingFields = {}) {
+  let cleaned = String(markdown || '').trim();
+  const recovered = {};
+  const paragraphs = cleaned.split(/\n{2,}/);
+  const articleBodyIndex = paragraphs.findIndex((paragraph, index) => {
+    if (index > 16) return false;
+    const normalized = normalizeParagraphLabel(paragraph);
+    return normalized === 'article body' || normalized === 'article body:';
+  });
+
+  if (articleBodyIndex >= 0) {
+    const metadataPrefix = paragraphs.slice(0, articleBodyIndex).join('\n\n');
+    for (const segment of extractMetadataSegments(metadataPrefix)) {
+      if (!segment.value) continue;
+      if (segment.key === 'keywords') {
+        recovered.keywords = normalizeKeywords(segment.value);
+      } else {
+        recovered[segment.key] = segment.value;
+      }
+    }
+
+    cleaned = paragraphs.slice(articleBodyIndex + 1).join('\n\n').trim();
+    return { markdown: cleaned, recovered };
+  }
+
+  const keepReadingIndex = paragraphs.findIndex((paragraph, index) => {
+    if (index > 12) return false;
+    return Boolean(extractKeepReadingStart(paragraph));
+  });
+
+  if (keepReadingIndex >= 0) {
+    const metadataPrefix = paragraphs.slice(0, keepReadingIndex).join('\n\n');
+    for (const segment of extractMetadataSegments(metadataPrefix)) {
+      if (!segment.value) continue;
+      if (segment.key === 'keywords') {
+        recovered.keywords = normalizeKeywords(segment.value);
+      } else {
+        recovered[segment.key] = segment.value;
+      }
+    }
+
+    const boundary = extractKeepReadingStart(paragraphs[keepReadingIndex]);
+    const bodyParagraphs = paragraphs.slice(keepReadingIndex + 1);
+    if (boundary?.body) {
+      bodyParagraphs.unshift(boundary.body);
+    }
+    cleaned = bodyParagraphs.join('\n\n').trim();
+    return { markdown: cleaned, recovered };
+  }
+
+  let firstBodyIndex = 0;
+
+  while (firstBodyIndex < paragraphs.length) {
+    const paragraph = paragraphs[firstBodyIndex].trim();
+    if (!paragraph) {
+      firstBodyIndex++;
+      continue;
+    }
+
+    const segments = extractMetadataSegments(paragraph);
+    if (!segments.length) break;
+
+    for (const segment of segments) {
+      if (!segment.value) continue;
+      if (segment.key === 'keywords') {
+        recovered.keywords = normalizeKeywords(segment.value);
+      } else {
+        recovered[segment.key] = segment.value;
+      }
+    }
+
+    firstBodyIndex++;
+  }
+
+  cleaned = paragraphs.slice(firstBodyIndex).join('\n\n').trim();
+  return { markdown: cleaned, recovered };
+}
+
+export { convertToMarkdown, scrubLeadingMetadata };

@@ -21,10 +21,15 @@ const HEADER_ALIASES = {
   send_time: ['send time', 'send_time', 'sent at', 'sent_at', 'scheduled at', 'scheduled_at'],
   send_date: ['send date', 'send_date', 'sent date', 'scheduled date'],
   recipients: ['recipients', 'recipient', 'total recipients', 'unique recipients', 'delivered', 'received'],
+  sent_emails: ['sent', 'sent emails', 'emails sent', 'messages sent'],
+  delivered_emails: ['delivered emails', 'emails delivered', 'total delivered'],
+  delivered_rate: ['delivered rate', 'delivered rate percent'],
   opens: ['opens', 'unique opens', 'opened'],
   open_rate: ['open rate', 'open_rate', 'unique open rate', 'open rate percent', 'unique open rate percent'],
   clicks: ['clicks', 'unique clicks', 'clicked'],
   click_rate: ['click rate', 'click_rate', 'unique click rate', 'ctr', 'click rate percent', 'ctr percent'],
+  unsubscribes: ['unsubscribes', 'unsubscribe count', 'unsubscribe total'],
+  unsubscribe_rate: ['unsubscribe rate', 'unsubscribe rate percent'],
   bounces: ['bounces', 'bounce count'],
   bounce_rate: ['bounce rate', 'bounce_rate', 'bounce rate percent'],
   revenue: ['revenue', 'conversion value'],
@@ -211,16 +216,24 @@ function buildIndexes(campaigns) {
 
 function deriveRates(row) {
   const recipients = parseInteger(row.recipients);
+  const sentEmails = parseInteger(row.sent_emails);
+  const deliveredEmails = parseInteger(row.delivered_emails) ?? recipients;
   const opens = parseInteger(row.opens);
   const clicks = parseInteger(row.clicks);
+  const unsubscribes = parseInteger(row.unsubscribes);
   const bounces = parseInteger(row.bounces);
 
   return {
     recipients,
+    sent_emails: sentEmails,
+    delivered_emails: deliveredEmails,
+    delivered_rate: parseRate(row.delivered_rate) ?? (sentEmails && deliveredEmails != null ? deliveredEmails / sentEmails : null),
     opens,
     open_rate: parseRate(row.open_rate) ?? (recipients && opens != null ? opens / recipients : null),
     clicks,
     click_rate: parseRate(row.click_rate) ?? (recipients && clicks != null ? clicks / recipients : null),
+    unsubscribes,
+    unsubscribe_rate: parseRate(row.unsubscribe_rate) ?? (deliveredEmails && unsubscribes != null ? unsubscribes / deliveredEmails : null),
     bounces,
     bounce_rate: parseRate(row.bounce_rate) ?? (recipients && bounces != null ? bounces / recipients : null),
     revenue: parseNumeric(row.revenue),
@@ -376,6 +389,11 @@ export function confirmKlaviyoCsvImport(preview, fileName = null) {
         open_rate: row.open_rate ?? existing?.open_rate ?? null,
         clicks: row.clicks ?? existing?.clicks ?? null,
         click_rate: row.click_rate ?? existing?.click_rate ?? null,
+        sent_emails: row.sent_emails ?? existing?.sent_emails ?? null,
+        delivered_emails: row.delivered_emails ?? existing?.delivered_emails ?? null,
+        delivered_rate: row.delivered_rate ?? existing?.delivered_rate ?? null,
+        unsubscribes: row.unsubscribes ?? existing?.unsubscribes ?? null,
+        unsubscribe_rate: row.unsubscribe_rate ?? existing?.unsubscribe_rate ?? null,
         bounces: row.bounces ?? existing?.bounces ?? null,
         bounce_rate: row.bounce_rate ?? existing?.bounce_rate ?? null,
         revenue: row.revenue ?? existing?.revenue ?? null,

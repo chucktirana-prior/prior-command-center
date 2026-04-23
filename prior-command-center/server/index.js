@@ -1,4 +1,5 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
+dotenv.config({ override: true });
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
@@ -8,6 +9,7 @@ import config, { hasContentfulConfig, getContentfulTokenRotationStatus } from '.
 import { initDb, getAllLastSyncs } from './db/index.js';
 import { resumeBackgroundJobs, syncAll } from './services/sync.js';
 import { generateWeeklyDigest, detectAndAnalyzeAnomalies } from './services/intelligence/index.js';
+import { resumeLocationMonitorJobs } from './services/locationMonitor/jobs.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -19,6 +21,7 @@ app.use(express.json({ limit: '5mb' }));
 // --- Initialize Database ---
 initDb();
 resumeBackgroundJobs();
+resumeLocationMonitorJobs();
 
 // --- API Routes ---
 

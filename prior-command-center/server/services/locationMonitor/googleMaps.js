@@ -89,6 +89,33 @@ function writeCheckResult(place, result) {
   });
 }
 
+function selectPlacesForMapsCheck(places, { limit = null, mode = 'all' } = {}) {
+  let selectedPlaces = places;
+
+  switch (mode) {
+    case 'unreviewed':
+      selectedPlaces = places.filter((place) => !place.last_checked_at || place.check_status === 'pending');
+      break;
+    case 'risky':
+      selectedPlaces = places.filter((place) => (
+        ['suspect', 'error'].includes(place.website_check_status)
+        || ['needs_review', 'likely_changed', 'likely_closed'].includes(place.ai_review_status)
+        || ['closed', 'not_found', 'error'].includes(place.check_status)
+      ));
+      break;
+    case 'all':
+    default:
+      selectedPlaces = places;
+      break;
+  }
+
+  if (typeof limit === 'number' && limit > 0) {
+    return selectedPlaces.slice(0, limit);
+  }
+
+  return selectedPlaces;
+}
+
 export async function checkLocationPlace(placeId) {
   if (!isConfigured()) {
     throw new Error('GOOGLE_MAPS_API_KEY not configured');
@@ -140,27 +167,57 @@ export async function checkLocationPlace(placeId) {
   }
 }
 
-export async function checkAllLocationPlaces() {
+export async function checkAllLocationPlaces({ limit = null, mode = 'all', placeIds = null, initialProcessed = 0, totalOverride = null, onProgress = null, shouldStop = null } = {}) {
   if (!isConfigured()) {
     throw new Error('GOOGLE_MAPS_API_KEY not configured');
   }
 
   const places = listLocationPlaces();
+  const selectedPlaces = Array.isArray(placeIds)
+    ? placeIds.map((id) => places.find((place) => place.id === id)).filter(Boolean)
+    : selectPlacesForMapsCheck(places, { limit, mode });
+  const totalCount = totalOverride ?? selectedPlaces.length;
   const summary = {
-    checked: 0,
+    mode,
+    selected: totalCount,
+    checked: initialProcessed,
     open: 0,
     closed: 0,
     notFound: 0,
     errors: 0,
   };
 
-  for (const place of places) {
+  onProgress?.({
+    mode,
+    processed: initialProcessed,
+    total: totalCount,
+    progress_pct: totalCount ? Math.round((initialProcessed / totalCount) * 100) : 100,
+    detail: selectedPlaces.length ? 'Preparing Google Maps checks' : 'No matching places to check',
+  });
+
+  for (const place of selectedPlaces) {
+    if (shouldStop?.()) break;
+    onProgress?.({
+      mode,
+      processed: summary.checked,
+      total: totalCount,
+      progress_pct: totalCount ? Math.round((summary.checked / totalCount) * 100) : 100,
+      detail: `Checking ${place.business_name}`,
+    });
     const result = await checkLocationPlace(place.id);
     summary.checked++;
     if (result.checkStatus === 'open') summary.open++;
     else if (result.checkStatus === 'closed') summary.closed++;
     else if (result.checkStatus === 'not_found') summary.notFound++;
     else if (result.checkStatus === 'error') summary.errors++;
+
+    onProgress?.({
+      mode,
+      processed: summary.checked,
+      total: totalCount,
+      progress_pct: totalCount ? Math.round((summary.checked / totalCount) * 100) : 100,
+      detail: `Checked ${place.business_name}`,
+    });
   }
 
   return summary;

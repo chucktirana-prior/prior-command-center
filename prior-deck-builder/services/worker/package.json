@@ -1,0 +1,14 @@
+{
+  "name": "@prior/deck-builder-worker",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@prior/deck-builder-core": "file:../../packages/core",
+    "dotenv": "^16.4.7"
+  }
+}

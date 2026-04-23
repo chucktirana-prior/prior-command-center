@@ -68,6 +68,14 @@ export async function createDraftArticle(fields) {
     isFreeContent: { 'en-US': fields.isFreeContent || false },
   };
 
+  if (fields.country) {
+    cfFields.country = { 'en-US': fields.country };
+  }
+
+  if (fields.region) {
+    cfFields.region = { 'en-US': fields.region };
+  }
+
   if (fields.datePublished) {
     cfFields.datePublished = { 'en-US': fields.datePublished };
   }
@@ -103,6 +111,14 @@ export async function createDraftArticle(fields) {
     cfFields.heroCaption = { 'en-US': fields.heroCaption };
   }
 
+  if (fields.relatedArticleIds?.length) {
+    cfFields.relatedArticles = {
+      'en-US': fields.relatedArticleIds.map((id) => ({
+        sys: { type: 'Link', linkType: 'Entry', id },
+      })),
+    };
+  }
+
   if (fields.indexImageAssetId) {
     cfFields.indexImage = {
       'en-US': {
@@ -120,6 +136,30 @@ export async function createDraftArticle(fields) {
     spaceId: config.contentful.spaceId,
     environment: config.contentful.environment,
   };
+}
+
+export async function searchArticlesBySlugs(slugs) {
+  if (!slugs.length) return [];
+  const env = await getEnvironment();
+
+  // Search for all slugs in one request. Also include the last path segment of
+  // each slug so e.g. "italy/puglia-villa-week" matches a slug "puglia-villa-week".
+  const allSlugs = [...new Set([
+    ...slugs,
+    ...slugs.map((s) => s.split('/').filter(Boolean).pop()).filter(Boolean),
+  ])];
+
+  const entries = await env.getEntries({
+    content_type: config.contentful.articleTypeId,
+    'fields.slug[in]': allSlugs.join(','),
+    limit: 20,
+  });
+
+  return entries.items.map((item) => ({
+    id: item.sys.id,
+    title: item.fields.title?.['en-US'] || item.fields.title || '',
+    slug: item.fields.slug?.['en-US'] || item.fields.slug || '',
+  }));
 }
 
 async function uploadSingleAsset(env, file, fileMeta, label) {

@@ -6,7 +6,48 @@ import ImageMatcher from './ImageMatcher';
 import { extractFigures, replaceFigureSrcs } from '../../utils/figureParser';
 import { getBodySlotKey, normalizeImages, parseBodySlotKey, suggestAssignments } from '../../utils/imageNaming';
 
+function hrefsToSlugs(hrefs) {
+  const slugs = new Set();
+  for (const href of hrefs) {
+    try {
+      const pathname = new URL(href, 'https://x.com').pathname;
+      const slug = pathname.replace(/^\/+|\/+$/g, '');
+      if (slug) slugs.add(slug);
+    } catch {
+      // skip malformed
+    }
+  }
+  return [...slugs];
+}
+
+function deriveLocationFields(locationValue) {
+  const raw = String(locationValue || '').trim();
+  if (!raw) {
+    return { locationLabel: '', country: '', region: '' };
+  }
+
+  const parts = raw
+    .split(/(?:\s*[|/]\s*|\s*,\s*)/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  if (parts.length >= 2) {
+    return {
+      locationLabel: raw,
+      region: parts[0],
+      country: parts[parts.length - 1],
+    };
+  }
+
+  return {
+    locationLabel: raw,
+    country: raw,
+    region: '',
+  };
+}
+
 export default function ReviewScreen({ data, imageFiles, onSaved, onCancel }) {
+  const derivedLocation = deriveLocationFields(data.location);
   const [fields, setFields] = useState({
     title: data.title || '',
     subtitle: data.subtitle || '',
@@ -17,6 +58,9 @@ export default function ReviewScreen({ data, imageFiles, onSaved, onCancel }) {
     keywords: data.keywords || [],
     articleBody: data.articleBody || '',
     heroCaption: data.heroCaption || '',
+    locationLabel: derivedLocation.locationLabel,
+    country: derivedLocation.country,
+    region: derivedLocation.region,
     datePublished: '',
     updatedAt: '',
     hideFromLatestArticles: false,
@@ -30,6 +74,9 @@ export default function ReviewScreen({ data, imageFiles, onSaved, onCancel }) {
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState('');
   const [error, setError] = useState(null);
+  const [relatedArticles, setRelatedArticles] = useState([]);
+  const [selectedRelatedIds, setSelectedRelatedIds] = useState(new Set());
+  const [relatedLoading, setRelatedLoading] = useState(false);
 
   const figures = useMemo(() => extractFigures(fields.articleBody), [fields.articleBody]);
   const images = useMemo(() => normalizeImages(imageFiles), [imageFiles]);
@@ -83,6 +130,25 @@ export default function ReviewScreen({ data, imageFiles, onSaved, onCancel }) {
       return changed ? next : prev;
     });
   }, [figures, images]);
+
+  useEffect(() => {
+    const slugs = hrefsToSlugs(data.keepReadingLinks || []);
+    if (!slugs.length) return;
+
+    setRelatedLoading(true);
+    const params = new URLSearchParams();
+    slugs.forEach((s) => params.append('slug', s));
+
+    fetch(`/api/contentful/related-articles?${params}`)
+      .then((r) => r.json())
+      .then((result) => {
+        const articles = result.articles || [];
+        setRelatedArticles(articles);
+        setSelectedRelatedIds(new Set(articles.map((a) => a.id)));
+      })
+      .catch(() => {})
+      .finally(() => setRelatedLoading(false));
+  }, []);
 
   const imageMap = useMemo(
     () => new Map(images.map((image) => [image.id, image])),
@@ -227,7 +293,7 @@ export default function ReviewScreen({ data, imageFiles, onSaved, onCancel }) {
         allMeta.push({
           figureIndex: -1,
           fileName: confirmedHero.name,
-          title: fields.title ? `${fields.title} - Hero` : confirmedHero.name,
+          title: confirmedHero.name,
         });
       }
 
@@ -236,7 +302,7 @@ export default function ReviewScreen({ data, imageFiles, onSaved, onCancel }) {
         allMeta.push({
           figureIndex: -2,
           fileName: confirmedIndex.name,
-          title: fields.title ? `${fields.title} - Index` : confirmedIndex.name,
+          title: confirmedIndex.name,
         });
       }
 
@@ -252,7 +318,7 @@ export default function ReviewScreen({ data, imageFiles, onSaved, onCancel }) {
         allMeta.push({
           figureIndex,
           fileName: image.name,
-          title: figure.caption || figure.alt || image.name,
+          title: image.name,
         });
       }
 
@@ -301,6 +367,7 @@ export default function ReviewScreen({ data, imageFiles, onSaved, onCancel }) {
         categoryIds: categories.map((c) => c.id),
         heroImageAssetId,
         indexImageAssetId,
+        relatedArticleIds: [...selectedRelatedIds],
       };
 
       const res = await fetch('/api/contentful/draft', {
@@ -367,6 +434,25 @@ export default function ReviewScreen({ data, imageFiles, onSaved, onCancel }) {
             value={fields.heroCaption}
             onChange={(e) => updateField('heroCaption', e.target.value)}
           />
+        </div>
+
+        <div className="form-row">
+          <div className="form-group">
+            <label htmlFor="country">Country</label>
+            <input
+              id="country"
+              value={fields.country}
+              onChange={(e) => updateField('country', e.target.value)}
+            />
+          </div>
+          <div className="form-group">
+            <label htmlFor="region">Region</label>
+            <input
+              id="region"
+              value={fields.region}
+              onChange={(e) => updateField('region', e.target.value)}
+            />
+          </div>
         </div>
       </section>
 
@@ -506,6 +592,38 @@ export default function ReviewScreen({ data, imageFiles, onSaved, onCancel }) {
           </label>
         </div>
       </section>
+
+      {(relatedLoading || relatedArticles.length > 0) && (
+        <section className="form-section">
+          <h2>Related Articles</h2>
+          {relatedLoading ? (
+            <p className="muted">Finding related articles from links in the body…</p>
+          ) : (
+            <div className="related-articles-list">
+              {relatedArticles.map((article) => (
+                <label key={article.id} className="toggle-label">
+                  <input
+                    type="checkbox"
+                    checked={selectedRelatedIds.has(article.id)}
+                    onChange={(e) => {
+                      setSelectedRelatedIds((prev) => {
+                        const next = new Set(prev);
+                        if (e.target.checked) next.add(article.id);
+                        else next.delete(article.id);
+                        return next;
+                      });
+                    }}
+                  />
+                  {article.title}
+                  <span className="muted" style={{ marginLeft: '0.4em', fontSize: '0.85em' }}>
+                    /{article.slug}
+                  </span>
+                </label>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
 
       <div className="action-bar">
         <button type="button" className="btn-secondary" onClick={onCancel} disabled={saving}>

@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Location Monitor — Flow</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Georgia', serif;
+      background: #faf9f7;
+      color: #1a1a1a;
+      padding: 40px 32px 80px;
+      min-height: 100vh;
+    }
+    h1 {
+      font-size: 22px;
+      font-weight: 600;
+      letter-spacing: -0.3px;
+      margin-bottom: 6px;
+    }
+    .subtitle {
+      font-size: 13px;
+      color: #888;
+      margin-bottom: 40px;
+    }
+
+    /* ── Layout ── */
+    .diagram {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      max-width: 860px;
+      margin: 0 auto;
+    }
+
+    /* ── Import trigger row ── */
+    .trigger-row {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 0;
+    }
+    .trigger-box {
+      background: #1a1a1a;
+      color: #fff;
+      border-radius: 14px;
+      padding: 14px 28px;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-align: center;
+    }
+    .trigger-box .sub { font-size: 11px; font-weight: 400; color: #aaa; margin-top: 3px; }
+
+    /* ── Arrow ── */
+    .arrow-down {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 36px;
+      color: #bbb;
+      font-size: 20px;
+    }
+    .arrow-down.split { position: relative; }
+
+    /* ── Two-column source row ── */
+    .source-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    .source-box {
+      border-radius: 14px;
+      padding: 16px 18px;
+      font-size: 12px;
+    }
+    .source-box .label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+    .source-box .name { font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+    .source-box .fields { color: #666; line-height: 1.7; font-size: 12px; }
+    .source-box .fields span {
+      display: inline-block;
+      background: rgba(0,0,0,0.06);
+      border-radius: 6px;
+      padding: 1px 7px;
+      margin: 2px 2px 2px 0;
+      font-size: 11px;
+    }
+
+    .box-article { background: #f0f4ff; border: 1.5px solid #c5d3f8; }
+    .box-article .label { color: #4f6ef7; }
+    .box-guide  { background: #e8f5ff; border: 1.5px solid #b3d9f7; }
+    .box-guide .label  { color: #1e88d4; }
+
+    /* ── Resolve row ── */
+    .resolve-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    .resolve-box {
+      border-radius: 12px;
+      padding: 12px 16px;
+      font-size: 12px;
+      border: 1.5px dashed #d0d0d0;
+      background: #fefefe;
+      color: #555;
+    }
+    .resolve-box .label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #999;
+      margin-bottom: 4px;
+    }
+
+    /* ── Merge row ── */
+    .merge-row {
+      display: flex;
+      justify-content: center;
+    }
+    .merge-box {
+      background: #fff8ec;
+      border: 1.5px solid #f5c97a;
+      border-radius: 14px;
+      padding: 16px 28px;
+      font-size: 12px;
+      text-align: center;
+      width: 100%;
+      max-width: 480px;
+    }
+    .merge-box .label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #c98a00;
+      margin-bottom: 6px;
+    }
+    .merge-box .name { font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+    .merge-box .fields { color: #888; font-size: 11px; line-height: 1.8; }
+    .merge-box .fields span {
+      display: inline-block;
+      background: rgba(200,130,0,0.1);
+      border-radius: 6px;
+      padding: 1px 7px;
+      margin: 2px;
+    }
+
+    /* ── Checks row ── */
+    .checks-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 12px;
+    }
+    .check-box {
+      border-radius: 14px;
+      padding: 14px 16px;
+      font-size: 12px;
+      text-align: center;
+    }
+    .check-box .icon { font-size: 22px; margin-bottom: 6px; }
+    .check-box .name { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+    .check-box .desc { font-size: 11px; color: #777; line-height: 1.5; }
+
+    .box-maps   { background: #f0faf3; border: 1.5px solid #9fd9b3; }
+    .box-web    { background: #f4f0ff; border: 1.5px solid #c4b5f8; }
+    .box-ai     { background: #fff0f5; border: 1.5px solid #f7b8cd; }
+
+    /* ── Result row ── */
+    .result-row {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 10px;
+    }
+    .result-pill {
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-size: 11px;
+      font-weight: 600;
+      text-align: center;
+      border: 1.5px solid;
+    }
+    .pill-green  { background: #e8f9ee; color: #1b7a40; border-color: #82d4a3; }
+    .pill-red    { background: #fdecea; color: #b71c1c; border-color: #f5a8a0; }
+    .pill-amber  { background: #fff8e1; color: #8a5700; border-color: #f5c97a; }
+    .pill-orange { background: #fff3e0; color: #8f3e00; border-color: #ffb679; }
+    .pill-gray   { background: #f2f2f2; color: #555;    border-color: #ccc; }
+
+    /* ── UI badge callout ── */
+    .badge-callout {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
+      padding: 6px 14px;
+      font-size: 12px;
+      border: 1.5px solid;
+    }
+    .badge-blue   { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
+    .badge-plain  { background: #f4f4f4; color: #444;    border-color: #d8d8d8; }
+
+    /* ── Section header ── */
+    .section-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: #bbb;
+      text-align: center;
+      margin: 4px 0 2px;
+    }
+
+    /* connector lines using CSS border */
+    .connector {
+      display: flex;
+      justify-content: center;
+    }
+    .connector-line {
+      width: 2px;
+      height: 28px;
+      background: #ddd;
+    }
+    .connector-wide {
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      height: 36px;
+      position: relative;
+    }
+    .connector-wide::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 25%;
+      right: 25%;
+      height: 2px;
+      background: #ddd;
+    }
+    .connector-wide::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 50%;
+      width: 2px;
+      background: #ddd;
+    }
+    .connector-split {
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      height: 36px;
+      position: relative;
+    }
+    .connector-split::before {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 25%;
+      right: 25%;
+      height: 2px;
+      background: #ddd;
+    }
+    .connector-split::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 50%;
+      width: 2px;
+      background: #ddd;
+    }
+    .left-stub {
+      position: absolute;
+      top: 0;
+      left: 25%;
+      width: 2px;
+      height: 100%;
+      background: #ddd;
+    }
+    .right-stub {
+      position: absolute;
+      top: 0;
+      right: 25%;
+      width: 2px;
+      height: 100%;
+      background: #ddd;
+    }
+  </style>
+</head>
+<body>
+
+<h1>Location Monitor — Full Flow</h1>
+<p class="subtitle">How guide post locations and article links both flow through the same check pipeline</p>
+
+<div class="diagram">
+
+  <!-- TRIGGER -->
+  <div class="trigger-row">
+    <div class="trigger-box">
+      Import from Contentful
+      <div class="sub">Runs both imports in parallel via Promise.all()</div>
+    </div>
+  </div>
+
+  <!-- split down -->
+  <div class="connector-split" style="position:relative;height:36px;">
+    <div style="position:absolute;top:0;left:50%;width:2px;height:100%;background:#ddd;"></div>
+    <div style="position:absolute;bottom:0;left:25%;right:25%;height:2px;background:#ddd;"></div>
+    <div style="position:absolute;bottom:0;left:25%;width:2px;height:50%;background:#ddd;"></div>
+    <div style="position:absolute;bottom:0;right:25%;width:2px;height:50%;background:#ddd;"></div>
+  </div>
+
+  <!-- TWO SOURCES -->
+  <div class="source-row">
+    <div class="source-box box-article">
+      <div class="label">Source A — Articles</div>
+      <div class="name">importLocationBusinessesFromContentful()</div>
+      <div class="fields">
+        Scans <span>articleBody</span> markdown for external links →
+        filters out non-venue patterns (book now, enquiry…) →
+        extracts <span>business_name</span> <span>website_url</span> <span>section</span>
+      </div>
+    </div>
+    <div class="source-box box-guide">
+      <div class="label">Source B — Guide Posts ✨ New</div>
+      <div class="name">importGuidePostsFromContentful()</div>
+      <div class="fields">
+        Fetches all <span>guidePost</span> entries →
+        batch-resolves parent <span>guide</span> title &amp; slug →
+        batch-resolves <span>guideType</span> for section label →
+        reads <span>title</span> <span>website</span> <span>address</span> <span>phoneNumber</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- resolve arrows -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;height:32px;">
+    <div class="connector" style="justify-content:center;align-items:flex-end;"><div class="connector-line"></div></div>
+    <div class="connector" style="justify-content:center;align-items:flex-end;"><div class="connector-line"></div></div>
+  </div>
+
+  <!-- RESOLVE step (guide post only) -->
+  <div class="resolve-row">
+    <div class="resolve-box">
+      <div class="label">Article result row</div>
+      article_id · article_title · section · business_name · website_url · source_type = <strong>"article"</strong>
+    </div>
+    <div class="resolve-box">
+      <div class="label">Guide post result row</div>
+      article_id = <em>guide's</em> Contentful ID · article_title = guide title · section = guideType name ·
+      address &amp; phone pre-populated · source_type = <strong>"guide_post"</strong>
+      <br/><br/>
+      <span style="font-size:10px;color:#aaa;">If no website → fallback URL: priorworld.com/guides/{guide}/{post}</span>
+    </div>
+  </div>
+
+  <!-- merge arrows -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;height:32px;">
+    <div class="connector" style="justify-content:center;align-items:flex-start;"><div class="connector-line"></div></div>
+    <div class="connector" style="justify-content:center;align-items:flex-start;"><div class="connector-line"></div></div>
+  </div>
+  <div class="connector-wide" style="position:relative;height:36px;">
+    <div style="position:absolute;top:0;left:25%;right:25%;height:2px;background:#ddd;"></div>
+    <div style="position:absolute;top:0;left:25%;width:2px;height:50%;background:#ddd;"></div>
+    <div style="position:absolute;top:0;right:25%;width:2px;height:50%;background:#ddd;"></div>
+    <div style="position:absolute;top:0;bottom:0;left:50%;width:2px;background:#ddd;"></div>
+  </div>
+
+  <!-- DB UPSERT -->
+  <div class="merge-row">
+    <div class="merge-box">
+      <div class="label">SQLite — location_places</div>
+      <div class="name">upsertLocationPlace()</div>
+      <div class="fields">
+        <span>UNIQUE(article_id, website_url)</span>
+        <span>source_type</span>
+        <span>address seed</span>
+        <span>phone seed</span>
+        <br/>
+        On conflict: updates metadata, preserves any existing Maps/website/AI check results
+      </div>
+    </div>
+  </div>
+
+  <div class="connector"><div class="connector-line" style="height:28px;"></div></div>
+
+  <!-- THREE CHECK TYPES -->
+  <div class="section-label">Check pipeline — runs on all rows regardless of source</div>
+  <div style="height:8px;"></div>
+  <div class="checks-row">
+    <div class="check-box box-maps">
+      <div class="icon">🗺️</div>
+      <div class="name">Google Maps Check</div>
+      <div class="desc">Searches by maps_query (name + address). Guide posts get more precise results because address is pre-seeded from Contentful.</div>
+    </div>
+    <div class="check-box box-web">
+      <div class="icon">🌐</div>
+      <div class="name">Website Check</div>
+      <div class="desc">Fetches website_url, scans for closure signals. Guide posts with a real venue website are fully checked. Prior-URL fallbacks return "active".</div>
+    </div>
+    <div class="check-box box-ai">
+      <div class="icon">🤖</div>
+      <div class="name">AI Review</div>
+      <div class="desc">Claude reads website evidence + Maps status and gives a confidence verdict. Works identically for both source types.</div>
+    </div>
+  </div>
+
+  <div class="connector"><div class="connector-line" style="height:28px;"></div></div>
+
+  <!-- RESULT STATUSES -->
+  <div class="section-label">Possible outcomes</div>
+  <div style="height:8px;"></div>
+  <div class="result-row">
+    <div class="result-pill pill-green">Open / Active / Likely Active</div>
+    <div class="result-pill pill-red">Closed / Likely Closed</div>
+    <div class="result-pill pill-amber">Suspect / Needs Review</div>
+    <div class="result-pill pill-orange">Error / Not Found</div>
+    <div class="result-pill pill-gray">Pending</div>
+  </div>
+
+  <div class="connector"><div class="connector-line" style="height:28px;"></div></div>
+
+  <!-- UI -->
+  <div class="section-label">UI — Tracked Businesses table</div>
+  <div style="height:8px;"></div>
+  <div class="badge-callout">
+    <div class="badge badge-plain">📰 Acme Bar&nbsp;&nbsp;<span style="color:#bbb;font-size:10px;">article link</span></div>
+    <div class="badge badge-blue">🏨 Nolinski Venezia &nbsp;<span style="background:#dbeafe;color:#1d4ed8;border-radius:999px;padding:1px 8px;font-size:10px;font-weight:700;">Guide</span></div>
+    <div class="badge badge-plain">🍽️ Bar Copains&nbsp;&nbsp;<span style="background:#dbeafe;color:#1d4ed8;border-radius:999px;padding:1px 8px;font-size:10px;font-weight:700;">Guide</span></div>
+  </div>
+  <div style="text-align:center;font-size:11px;color:#aaa;margin-top:10px;">
+    Blue "Guide" badge distinguishes guide post rows. Rollups in sidebar group by parent guide.
+  </div>
+
+</div>
+</body>
+</html>

@@ -19,17 +19,46 @@ export function initDb() {
   // Migration: add type column to insights if missing (existing DBs)
   try { db.exec('ALTER TABLE insights ADD COLUMN type TEXT DEFAULT "digest"'); } catch { /* already exists */ }
   try { db.exec('ALTER TABLE background_jobs ADD COLUMN next_retry_at TEXT'); } catch { /* already exists */ }
+  try { db.exec('ALTER TABLE background_jobs ADD COLUMN payload TEXT'); } catch { /* already exists */ }
   try { db.exec('ALTER TABLE klaviyo_campaigns ADD COLUMN opens INTEGER'); } catch { /* already exists */ }
   try { db.exec('ALTER TABLE klaviyo_campaigns ADD COLUMN clicks INTEGER'); } catch { /* already exists */ }
+  try { db.exec('ALTER TABLE klaviyo_campaigns ADD COLUMN sent_emails INTEGER'); } catch { /* already exists */ }
+  try { db.exec('ALTER TABLE klaviyo_campaigns ADD COLUMN delivered_emails INTEGER'); } catch { /* already exists */ }
+  try { db.exec('ALTER TABLE klaviyo_campaigns ADD COLUMN delivered_rate REAL'); } catch { /* already exists */ }
+  try { db.exec('ALTER TABLE klaviyo_campaigns ADD COLUMN unsubscribes INTEGER'); } catch { /* already exists */ }
+  try { db.exec('ALTER TABLE klaviyo_campaigns ADD COLUMN unsubscribe_rate REAL'); } catch { /* already exists */ }
   try { db.exec('ALTER TABLE klaviyo_campaigns ADD COLUMN bounces INTEGER'); } catch { /* already exists */ }
   try { db.exec('ALTER TABLE klaviyo_campaigns ADD COLUMN metadata_synced_at TEXT'); } catch { /* already exists */ }
   try { db.exec('ALTER TABLE klaviyo_campaigns ADD COLUMN csv_imported_at TEXT'); } catch { /* already exists */ }
   try { db.exec('ALTER TABLE klaviyo_campaigns ADD COLUMN metrics_source TEXT DEFAULT "api"'); } catch { /* already exists */ }
   try { db.exec('ALTER TABLE klaviyo_campaigns ADD COLUMN match_key TEXT'); } catch { /* already exists */ }
+  try { db.exec('ALTER TABLE ga_pages ADD COLUMN engaged_sessions INTEGER'); } catch { /* already exists */ }
+  try { db.exec('ALTER TABLE ga_pages ADD COLUMN active_users INTEGER'); } catch { /* already exists */ }
+  try { db.exec('ALTER TABLE ga_pages ADD COLUMN new_users INTEGER'); } catch { /* already exists */ }
+  try { db.exec('ALTER TABLE ga_pages ADD COLUMN entrances INTEGER'); } catch { /* already exists */ }
+  try { db.exec('ALTER TABLE ga_pages ADD COLUMN landing_page_sessions INTEGER'); } catch { /* already exists */ }
+  try { db.exec('ALTER TABLE ga_pages ADD COLUMN key_events REAL'); } catch { /* already exists */ }
+  try { db.exec('ALTER TABLE ga_pages ADD COLUMN user_engagement_duration REAL'); } catch { /* already exists */ }
+  try { db.exec('ALTER TABLE ga_traffic ADD COLUMN engaged_sessions INTEGER'); } catch { /* already exists */ }
+  try { db.exec('ALTER TABLE ga_traffic ADD COLUMN new_users INTEGER'); } catch { /* already exists */ }
+  try { db.exec('ALTER TABLE ga_traffic ADD COLUMN key_events REAL'); } catch { /* already exists */ }
+  try { db.exec('ALTER TABLE ga_traffic ADD COLUMN user_engagement_duration REAL'); } catch { /* already exists */ }
   try { db.exec('ALTER TABLE location_places ADD COLUMN date_published TEXT'); } catch { /* already exists */ }
   try { db.exec('ALTER TABLE location_places ADD COLUMN article_url TEXT'); } catch { /* already exists */ }
   try { db.exec('ALTER TABLE location_places ADD COLUMN source_link_text TEXT'); } catch { /* already exists */ }
   try { db.exec('ALTER TABLE location_places ADD COLUMN confidence REAL'); } catch { /* already exists */ }
+  try { db.exec('ALTER TABLE location_places ADD COLUMN website_check_status TEXT DEFAULT "pending"'); } catch { /* already exists */ }
+  try { db.exec('ALTER TABLE location_places ADD COLUMN website_http_status INTEGER'); } catch { /* already exists */ }
+  try { db.exec('ALTER TABLE location_places ADD COLUMN website_final_url TEXT'); } catch { /* already exists */ }
+  try { db.exec('ALTER TABLE location_places ADD COLUMN website_page_title TEXT'); } catch { /* already exists */ }
+  try { db.exec('ALTER TABLE location_places ADD COLUMN website_signal_summary TEXT'); } catch { /* already exists */ }
+  try { db.exec('ALTER TABLE location_places ADD COLUMN website_checked_at TEXT'); } catch { /* already exists */ }
+  try { db.exec('ALTER TABLE location_places ADD COLUMN ai_review_status TEXT DEFAULT "pending"'); } catch { /* already exists */ }
+  try { db.exec('ALTER TABLE location_places ADD COLUMN ai_review_confidence REAL'); } catch { /* already exists */ }
+  try { db.exec('ALTER TABLE location_places ADD COLUMN ai_review_summary TEXT'); } catch { /* already exists */ }
+  try { db.exec('ALTER TABLE location_places ADD COLUMN ai_review_recommendation TEXT'); } catch { /* already exists */ }
+  try { db.exec('ALTER TABLE location_places ADD COLUMN ai_reviewed_at TEXT'); } catch { /* already exists */ }
+  try { db.exec('ALTER TABLE location_places ADD COLUMN source_type TEXT DEFAULT "article"'); } catch { /* already exists */ }
 
   console.log(`Database initialized at ${dbPath}`);
   return db;
@@ -45,9 +74,9 @@ export function getDb() {
 export function upsertKlaviyoCampaign(row) {
   const stmt = getDb().prepare(`
     INSERT INTO klaviyo_campaigns
-      (id, name, subject, send_time, opens, open_rate, clicks, click_rate, bounces, bounce_rate, revenue, recipients, synced_at, metadata_synced_at, csv_imported_at, metrics_source, match_key)
+      (id, name, subject, send_time, opens, open_rate, clicks, click_rate, sent_emails, delivered_emails, delivered_rate, unsubscribes, unsubscribe_rate, bounces, bounce_rate, revenue, recipients, synced_at, metadata_synced_at, csv_imported_at, metrics_source, match_key)
     VALUES
-      (@id, @name, @subject, @send_time, @opens, @open_rate, @clicks, @click_rate, @bounces, @bounce_rate, @revenue, @recipients, @synced_at, @metadata_synced_at, @csv_imported_at, @metrics_source, @match_key)
+      (@id, @name, @subject, @send_time, @opens, @open_rate, @clicks, @click_rate, @sent_emails, @delivered_emails, @delivered_rate, @unsubscribes, @unsubscribe_rate, @bounces, @bounce_rate, @revenue, @recipients, @synced_at, @metadata_synced_at, @csv_imported_at, @metrics_source, @match_key)
     ON CONFLICT(id) DO UPDATE SET
       name = COALESCE(excluded.name, klaviyo_campaigns.name),
       subject = COALESCE(excluded.subject, klaviyo_campaigns.subject),
@@ -56,6 +85,11 @@ export function upsertKlaviyoCampaign(row) {
       open_rate = COALESCE(excluded.open_rate, klaviyo_campaigns.open_rate),
       clicks = COALESCE(excluded.clicks, klaviyo_campaigns.clicks),
       click_rate = COALESCE(excluded.click_rate, klaviyo_campaigns.click_rate),
+      sent_emails = COALESCE(excluded.sent_emails, klaviyo_campaigns.sent_emails),
+      delivered_emails = COALESCE(excluded.delivered_emails, klaviyo_campaigns.delivered_emails),
+      delivered_rate = COALESCE(excluded.delivered_rate, klaviyo_campaigns.delivered_rate),
+      unsubscribes = COALESCE(excluded.unsubscribes, klaviyo_campaigns.unsubscribes),
+      unsubscribe_rate = COALESCE(excluded.unsubscribe_rate, klaviyo_campaigns.unsubscribe_rate),
       bounces = COALESCE(excluded.bounces, klaviyo_campaigns.bounces),
       bounce_rate = COALESCE(excluded.bounce_rate, klaviyo_campaigns.bounce_rate),
       revenue = COALESCE(excluded.revenue, klaviyo_campaigns.revenue),
@@ -129,9 +163,9 @@ export function getKlaviyoMetricsStatus() {
 export function upsertGaPage(row) {
   const stmt = getDb().prepare(`
     INSERT OR REPLACE INTO ga_pages
-      (page_path, date, page_views, sessions, avg_session_duration, engagement_rate, bounce_rate, synced_at)
+      (page_path, date, page_views, sessions, engaged_sessions, active_users, new_users, entrances, landing_page_sessions, key_events, avg_session_duration, user_engagement_duration, engagement_rate, bounce_rate, synced_at)
     VALUES
-      (@page_path, @date, @page_views, @sessions, @avg_session_duration, @engagement_rate, @bounce_rate, @synced_at)
+      (@page_path, @date, @page_views, @sessions, @engaged_sessions, @active_users, @new_users, @entrances, @landing_page_sessions, @key_events, @avg_session_duration, @user_engagement_duration, @engagement_rate, @bounce_rate, @synced_at)
   `);
   return stmt.run(row);
 }
@@ -154,9 +188,9 @@ export function getGaPages(startDate, endDate) {
 export function upsertGaTraffic(row) {
   const stmt = getDb().prepare(`
     INSERT OR REPLACE INTO ga_traffic
-      (source, medium, date, sessions, users, synced_at)
+      (source, medium, date, sessions, users, engaged_sessions, new_users, key_events, user_engagement_duration, synced_at)
     VALUES
-      (@source, @medium, @date, @sessions, @users, @synced_at)
+      (@source, @medium, @date, @sessions, @users, @engaged_sessions, @new_users, @key_events, @user_engagement_duration, @synced_at)
   `);
   return stmt.run(row);
 }
@@ -254,9 +288,9 @@ export function getAllLastSyncs() {
 export function insertBackgroundJob(job) {
   const stmt = getDb().prepare(`
     INSERT INTO background_jobs
-      (job_key, source, status, progress_pct, processed, total, detail, metrics_refreshed, mode, error_message, next_retry_at, started_at, updated_at, completed_at)
+      (job_key, source, status, progress_pct, processed, total, detail, metrics_refreshed, mode, payload, error_message, next_retry_at, started_at, updated_at, completed_at)
     VALUES
-      (@job_key, @source, @status, @progress_pct, @processed, @total, @detail, @metrics_refreshed, @mode, @error_message, @next_retry_at, @started_at, @updated_at, @completed_at)
+      (@job_key, @source, @status, @progress_pct, @processed, @total, @detail, @metrics_refreshed, @mode, @payload, @error_message, @next_retry_at, @started_at, @updated_at, @completed_at)
   `);
   return stmt.run(job);
 }
@@ -272,6 +306,7 @@ export function updateBackgroundJob(job) {
       detail = @detail,
       metrics_refreshed = @metrics_refreshed,
       mode = @mode,
+      payload = @payload,
       error_message = @error_message,
       next_retry_at = @next_retry_at,
       updated_at = @updated_at,
@@ -337,9 +372,10 @@ export function upsertLocationPlace(row) {
 
   const payload = {
     ...row,
+    source_type: row.source_type ?? 'article',
     google_place_id: existing?.google_place_id ?? null,
-    address: existing?.address ?? null,
-    phone: existing?.phone ?? null,
+    address: existing?.address ?? row.address ?? null,
+    phone: existing?.phone ?? row.phone ?? null,
     business_status: existing?.business_status ?? null,
     is_open: existing?.is_open ?? null,
     check_status: existing?.check_status ?? 'pending',
@@ -349,9 +385,9 @@ export function upsertLocationPlace(row) {
 
   const stmt = getDb().prepare(`
     INSERT INTO location_places
-      (article_id, article_title, article_slug, article_url, date_published, section, business_name, source_link_text, website_url, maps_query, google_place_id, address, phone, business_status, is_open, check_status, confidence, last_checked_at, first_seen_at, updated_at)
+      (article_id, article_title, article_slug, article_url, date_published, section, business_name, source_link_text, website_url, maps_query, google_place_id, address, phone, business_status, is_open, check_status, confidence, last_checked_at, source_type, first_seen_at, updated_at)
     VALUES
-      (@article_id, @article_title, @article_slug, @article_url, @date_published, @section, @business_name, @source_link_text, @website_url, @maps_query, @google_place_id, @address, @phone, @business_status, @is_open, @check_status, @confidence, @last_checked_at, @first_seen_at, @updated_at)
+      (@article_id, @article_title, @article_slug, @article_url, @date_published, @section, @business_name, @source_link_text, @website_url, @maps_query, @google_place_id, @address, @phone, @business_status, @is_open, @check_status, @confidence, @last_checked_at, @source_type, @first_seen_at, @updated_at)
     ON CONFLICT(article_id, website_url) DO UPDATE SET
       article_title = excluded.article_title,
       article_slug = excluded.article_slug,
@@ -393,6 +429,16 @@ export function getLocationPlaceById(id) {
   return getDb().prepare('SELECT * FROM location_places WHERE id = ?').get(id);
 }
 
+export function deleteLocationPlacesByIds(ids) {
+  if (!Array.isArray(ids) || ids.length === 0) return { changes: 0 };
+
+  const stmt = getDb().prepare(`
+    DELETE FROM location_places
+    WHERE id IN (${ids.map(() => '?').join(',')})
+  `);
+  return stmt.run(...ids);
+}
+
 export function updateLocationPlaceCheck(row) {
   const stmt = getDb().prepare(`
     UPDATE location_places
@@ -407,6 +453,57 @@ export function updateLocationPlaceCheck(row) {
       last_checked_at = @last_checked_at,
       updated_at = @updated_at
     WHERE id = @id
+  `);
+  return stmt.run(row);
+}
+
+export function updateLocationPlaceWebsiteEvidence(row) {
+  const stmt = getDb().prepare(`
+    UPDATE location_places
+    SET
+      website_check_status = @website_check_status,
+      website_http_status = @website_http_status,
+      website_final_url = @website_final_url,
+      website_page_title = @website_page_title,
+      website_signal_summary = @website_signal_summary,
+      website_checked_at = @website_checked_at,
+      updated_at = @updated_at
+    WHERE id = @id
+  `);
+  return stmt.run(row);
+}
+
+export function insertLocationWebsiteCheck(row) {
+  const stmt = getDb().prepare(`
+    INSERT INTO location_website_checks
+      (location_place_id, checked_at, check_status, http_status, final_url, page_title, signal_summary, closure_signals, redirect_chain, raw_excerpt, error_message)
+    VALUES
+      (@location_place_id, @checked_at, @check_status, @http_status, @final_url, @page_title, @signal_summary, @closure_signals, @redirect_chain, @raw_excerpt, @error_message)
+  `);
+  return stmt.run(row);
+}
+
+export function updateLocationPlaceAiReview(row) {
+  const stmt = getDb().prepare(`
+    UPDATE location_places
+    SET
+      ai_review_status = @ai_review_status,
+      ai_review_confidence = @ai_review_confidence,
+      ai_review_summary = @ai_review_summary,
+      ai_review_recommendation = @ai_review_recommendation,
+      ai_reviewed_at = @ai_reviewed_at,
+      updated_at = @updated_at
+    WHERE id = @id
+  `);
+  return stmt.run(row);
+}
+
+export function insertLocationAiReview(row) {
+  const stmt = getDb().prepare(`
+    INSERT INTO location_ai_reviews
+      (location_place_id, reviewed_at, review_status, confidence, summary, recommendation, evidence_snapshot, raw_response, error_message)
+    VALUES
+      (@location_place_id, @reviewed_at, @review_status, @confidence, @summary, @recommendation, @evidence_snapshot, @raw_response, @error_message)
   `);
   return stmt.run(row);
 }
@@ -431,6 +528,51 @@ export function getRecentLocationChecks(limit = 50) {
   `).all(limit);
 }
 
+export function getRecentLocationWebsiteChecks(limit = 25) {
+  return getDb().prepare(`
+    SELECT lwc.*, lp.business_name, lp.article_title, lp.website_url
+    FROM location_website_checks lwc
+    INNER JOIN location_places lp ON lp.id = lwc.location_place_id
+    ORDER BY lwc.id DESC
+    LIMIT ?
+  `).all(limit);
+}
+
+export function getRecentLocationAiReviews(limit = 25) {
+  return getDb().prepare(`
+    SELECT lar.*, lp.business_name, lp.article_title, lp.website_url
+    FROM location_ai_reviews lar
+    INNER JOIN location_places lp ON lp.id = lar.location_place_id
+    ORDER BY lar.id DESC
+    LIMIT ?
+  `).all(limit);
+}
+
+export function getLocationArticleRollups(limit = 25) {
+  return getDb().prepare(`
+    SELECT
+      article_id,
+      article_title,
+      article_slug,
+      article_url,
+      COUNT(*) AS total_places,
+      COALESCE(SUM(CASE WHEN website_check_status IN ('suspect', 'error', 'dead') THEN 1 ELSE 0 END), 0) AS website_at_risk_count,
+      COALESCE(SUM(CASE WHEN ai_review_status IN ('likely_changed', 'likely_closed', 'needs_review') THEN 1 ELSE 0 END), 0) AS ai_at_risk_count,
+      MAX(updated_at) AS updated_at,
+      MAX(website_checked_at) AS website_checked_at,
+      MAX(ai_reviewed_at) AS ai_reviewed_at
+    FROM location_places
+    GROUP BY article_id, article_title, article_slug, article_url
+    HAVING COUNT(*) > 0
+    ORDER BY
+      (COALESCE(SUM(CASE WHEN website_check_status IN ('suspect', 'error', 'dead') THEN 1 ELSE 0 END), 0)
+       + COALESCE(SUM(CASE WHEN ai_review_status IN ('likely_changed', 'likely_closed', 'needs_review') THEN 1 ELSE 0 END), 0)) DESC,
+      total_places DESC,
+      article_title ASC
+    LIMIT ?
+  `).all(limit);
+}
+
 export function getLocationMonitorSummary() {
   return getDb().prepare(`
     SELECT
@@ -440,8 +582,17 @@ export function getLocationMonitorSummary() {
       COALESCE(SUM(CASE WHEN check_status = 'not_found' THEN 1 ELSE 0 END), 0) AS not_found_count,
       COALESCE(SUM(CASE WHEN check_status = 'error' THEN 1 ELSE 0 END), 0) AS error_count,
       COALESCE(SUM(CASE WHEN check_status = 'pending' THEN 1 ELSE 0 END), 0) AS pending_count,
+      COALESCE(SUM(CASE WHEN website_check_status = 'active' THEN 1 ELSE 0 END), 0) AS website_active_count,
+      COALESCE(SUM(CASE WHEN website_check_status = 'suspect' THEN 1 ELSE 0 END), 0) AS website_suspect_count,
+      COALESCE(SUM(CASE WHEN website_check_status = 'error' THEN 1 ELSE 0 END), 0) AS website_error_count,
+      COALESCE(SUM(CASE WHEN ai_review_status = 'likely_active' THEN 1 ELSE 0 END), 0) AS ai_active_count,
+      COALESCE(SUM(CASE WHEN ai_review_status = 'likely_changed' THEN 1 ELSE 0 END), 0) AS ai_changed_count,
+      COALESCE(SUM(CASE WHEN ai_review_status = 'likely_closed' THEN 1 ELSE 0 END), 0) AS ai_closed_count,
+      COALESCE(SUM(CASE WHEN ai_review_status = 'needs_review' THEN 1 ELSE 0 END), 0) AS ai_needs_review_count,
       MAX(updated_at) AS last_import_at,
-      MAX(last_checked_at) AS last_checked_at
+      MAX(last_checked_at) AS last_checked_at,
+      MAX(website_checked_at) AS website_checked_at,
+      MAX(ai_reviewed_at) AS ai_reviewed_at
     FROM location_places
   `).get();
 }
